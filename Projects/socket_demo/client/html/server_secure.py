@@ -3,7 +3,7 @@
 HTTPS + Socket.IO server (Python replacement for server_secure.cjs).
 
 Dependencies:
-    pip install flask python-socketio eventlet
+    pip install flask python-socketio gevent gevent-websocket
 
 NOTE: The /proxy/* endpoint from the original Node.js server has been removed.
 If proxy support is needed in the future, implement a Flask /proxy/<path:url>
@@ -14,8 +14,8 @@ import os
 import argparse
 import mimetypes
 
-import eventlet
-import eventlet.wsgi
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
 import socketio
 from flask import Flask, send_from_directory, make_response
 
@@ -51,7 +51,7 @@ SSL_KEY    = os.path.join(SCRIPT_DIR, 'ssl', 'ca.key')
 
 
 # ── Socket.IO server ──────────────────────────────────────────────────────────
-sio = socketio.Server(cors_allowed_origins='*', async_mode='eventlet')
+sio = socketio.Server(cors_allowed_origins='*', async_mode='gevent')
 
 
 @sio.event
@@ -122,11 +122,10 @@ if __name__ == '__main__':
     scope = 'publicly' if args.public else 'locally'
     print(f'Dev server running {scope}.  Connect to https://localhost:{args.port}/')
 
-    listener = eventlet.listen((host, args.port))
-    ssl_listener = eventlet.wrap_ssl(
-        listener,
-        server_side=True,
-        certfile=SSL_CERT,
+    server = pywsgi.WSGIServer(
+        (host, args.port), wsgi_app,
+        handler_class=WebSocketHandler,
         keyfile=SSL_KEY,
+        certfile=SSL_CERT,
     )
-    eventlet.wsgi.server(ssl_listener, wsgi_app)
+    server.serve_forever()
