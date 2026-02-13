@@ -47,7 +47,7 @@ function arucoRemove()  {
 	data.camID   = document.getElementById('arucoCamID').value;
 	data.tagType = document.getElementById('arucoTagType').value;
 	
-	socket_client.emit('blah', ['arucoStop', data]);	
+	socket_client.emit('cam_control', ['arucoStop', data]);	
 }
 
 
@@ -61,7 +61,7 @@ function arucoSet()  {
 
 	console.log(data);
 	
-	socket_client.emit('blah', ['arucoStart', data]);
+	socket_client.emit('cam_control', ['arucoStart', data]);
 }
 
 
@@ -90,14 +90,14 @@ function barcodeStart()  {
 	data.framerate = document.getElementById('barcodeFramerate').value;
 	data.action    = document.getElementById('barcodeAction').value;
 	
-	socket_client.emit('blah', ['barcodeStart', data]);	
+	socket_client.emit('cam_control', ['barcodeStart', data]);	
 }
 
 function barcodeStop()  {
 	var data = {};
 	data.camID = document.getElementById('barcodeCamID').value;
 	
-	socket_client.emit('blah', ['barcodeStop', data]);		
+	socket_client.emit('cam_control', ['barcodeStop', data]);		
 }
 
 
@@ -135,14 +135,14 @@ function facedetectStart()  {
 	data.dnn            = document.getElementById('facedetectDNN').value;
 	data.device         = document.getElementById('facedetectDevice').value;
 	
-	socket_client.emit('blah', ['facedetectStart', data]);	
+	socket_client.emit('cam_control', ['facedetectStart', data]);	
 }
 
 function facedetectStop()  {
 	var data = {};
 	data.camID = document.getElementById('facedetectCamID').value;
 	
-	socket_client.emit('blah', ['facedetectStop', data]);		
+	socket_client.emit('cam_control', ['facedetectStop', data]);		
 }
 
 
@@ -186,7 +186,7 @@ function ultraStart()  {
 	data.drawLabel      = document.getElementById('ultraDrawLabel').checked;
 	data.maskOutline    = document.getElementById('ultraMaskOutline').checked;
 		
-	socket_client.emit('blah', ['ultraStart', data]);	
+	socket_client.emit('cam_control', ['ultraStart', data]);	
 }
 
 function ultraStop()  {
@@ -205,7 +205,7 @@ function ultraStop()  {
 		data.idName = "detect";		
 	}	
 	
-	socket_client.emit('blah', ['ultraStop', data]);		
+	socket_client.emit('cam_control', ['ultraStop', data]);		
 }
 
 
@@ -274,7 +274,21 @@ class CameraConfig  {
 			parentDiv = document.getElementById(parentDiv);
 			newDiv.setAttribute("class", "configInline");  // Specify the style properties of this div
 		}	
-		parentDiv.appendChild(newDiv);	
+		parentDiv.appendChild(newDiv);
 
 	}
+}
+
+// ─── Feature registration ─────────────────────────────────────────────────────
+// Add a new CameraConfig line here for each feature you create.
+
+function loadFeatures()  {
+	new CameraConfig(feature='aruco',      btnDiv='camBtnsDiv', btnText='ArUco',         cfgDiv='camConfigDiv', divFunc=arucoConfigDiv);
+	new CameraConfig(feature='barcode',    btnDiv='camBtnsDiv', btnText='Barcode',        cfgDiv='camConfigDiv', divFunc=barcodeConfigDiv);
+	new CameraConfig(feature='facedetect', btnDiv='camBtnsDiv', btnText='Face Detect',    cfgDiv='camConfigDiv', divFunc=facedetectConfigDiv);
+	new CameraConfig(feature='ultra',      btnDiv='camBtnsDiv', btnText='Ultralytics',    cfgDiv='camConfigDiv', divFunc=ultraConfigDiv);
+
+	new Stream(1, 'camStreamDiv', 'https://localhost:8001/stream.mjpg');
+	new Stream(2, 'camStreamDiv', 'https://localhost:8002/stream.mjpg');
+	new Stream(3, 'camStreamDiv', 'https://localhost:8003/stream.mjpg');
 }

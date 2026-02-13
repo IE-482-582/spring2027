@@ -61,9 +61,12 @@
 		 width:110px;
 	  }
 
-	  
+	  li.notice-error   { color: #c0392b; }
+	  li.notice-warning { color: #e67e22; }
+	  li.notice-info    { color: #555; }
+
     </style>
-  <script src="/socket.io.min.js"></script>
+  <script src="/scripts/socket.io.min.js"></script>
 
   <body>
 	<!--Login Window-->
@@ -93,6 +96,11 @@
 					<td> : <input type="text" id="client_port" title="(e.g., '8080')" style="width:50px;" value="8080"></td>
 				</tr>
 				<tr><td colspan=3>&nbsp;</td></tr>
+				<tr>
+					<td>NAME</td>
+					<td colspan=2><input type="text" id="user_name" title="Display name (optional)" placeholder="optional"></td>
+				</tr>
+				<tr><td colspan=3>&nbsp;</td></tr>
 				<tr><td colspan=3><center><button id="btnGo" onclick="connect();" style="width:100px;">Connect</button></center></td></tr>
 			</table>
 			</center>
@@ -111,7 +119,7 @@
 			<div style="float:left;">
 				<table id="tbl_robots" style="text-align:center;border-width:1px;border-style:solid;border-radius:2px;padding:0px;margin:10px;margin:10px;">
 					<tr style="background-color:#dddddd;">
-						<th>robotID</th><th>queueLength</th><th>yourPosition</th><th>status</th><th>&nbsp;</th>
+						<th>ID</th><th>name</th><th>type</th><th>availability</th><th>queue</th><th>position</th><th>est. wait</th><th>&nbsp;</th>
 					</tr>
 				</table>
 			</div>
@@ -239,408 +247,13 @@
 		</fieldset>
 	</div>
   </body>
-  <script src="aaa.js"></script>		<!-- FIXME -- Give this an actual name -->
-  <script src="cam_stream.js"></script>
+  <script src="scripts/cam_features.js"></script>
+  <script src="scripts/cam_stream.js"></script>
+  <script src="scripts/client.js"></script>
   <script>
-	// Global stuff
-	var configDivs = [];  
-	var robots = {};
-	var activeRobot = null;
-	var camStreams = {};
-	
-	function addToSelectList(lst, itmVal, itmTxt=null)  {
-		/*
-		Add `itmVal` to a select list named `lst`.
-		The text in the list be be itmTxt
-		*/ 
-		var selList = document.getElementById(lst);
-
-		// is this item already an option?
-		if (!isValueInOptions(selList, itmVal))  {	
-			// If not, add it to our select lists:
-			var el = document.createElement("option");
-			if (itmTxt == null)  {itmTxt = itmVal;} 
-			el.textContent = itmTxt;
-			el.value = itmVal;
-
-			selList.appendChild(el);
-		}  else  {
-			return;
-		}	
-	}		
-	
-	function isValueInOptions(sel, val)  {
-		/*
-		sel is of the form `document.getElemenById('someSelectElement')`
-		Check if `val` is a value in this select list.
-		*/
-
-		var found = false;
-		for (var i = 0; i < sel.options.length; i++)  {
-			if (sel.options[i].value == val)  {
-				found = true;
-				return true;
-			}
-		}	
-		return found;
-	}
-
-	function cameraAdd(camID, msg)  {
-		console.log(camID, msg);
-		
-		// Append to our cameras table.
-		// FIXME -- Insert camera in numerical order, rather than just at the bottom
-		const table = document.getElementById("tbl_cameras");
-		const newRow = table.insertRow();   // table.insertRow(rowIndex starting at 0);
-		
-		const cell1 = newRow.insertCell();
-		cell1.id = "td_camera_id_" + camID;
-		cell1.textContent = camID;
-		
-		const cell2 = newRow.insertCell();
-		cell2.id = "td_camera_url_" + camID;
-		cell2.textContent = msg.url;
-					
-		const cell3 = newRow.insertCell();
-		cell3.innerHTML = "<select id='sel_camera_" + camID + "'><option>1</option><option>2</option><option>3</option></select>";
-		// cell3.id = "td_camera_sel_" + camID;
-
-		const cell4 = newRow.insertCell();
-		cell4.innerHTML  = "<button id='btn_camera_watch" + camID + "' onClick='cameraStream(\"" + camID + "\");'>Stream</button>";
-		cell4.id = "td_robot_action_" + camID;
-
-		// Add this camera to our list of available aruco cameras
-		addToSelectList('arucoCamID', camID);
-		addToSelectList('barcodeCamID', camID);
-		addToSelectList('facedetectCamID', camID);
-		addToSelectList('ultraCamID', camID);
-		
-		// FIXME -- also add the camera to lists for other types of camera config options.
-	}
-	
-	function cameraStream(camID)  {
-		// Show camID on a particular camera stream
-		const streamID = document.getElementById('sel_camera_' + camID).value;
-		document.getElementById('txt_stream_addr_' + streamID).value = camStreams[camID].url;
-		toggleStream(streamID);
-	}
-
-	function robotAdd(robotID, msg)  {
-		// Check if we had previously added this robot
-		if (document.getElementById('tr_robot_' + robotID))  {
-			console.log('re-add robot');
-		}  else  {	
-			// Append to our robots table.
-			// FIXME -- Insert robot in numerical order, rather than just at the bottom
-			const table = document.getElementById("tbl_robots");
-			const newRow = table.insertRow();   // table.insertRow(rowIndex starting at 0);
-			
-			const cell1 = newRow.insertCell();
-			cell1.id = "td_robot_id_" + robotID;
-			cell1.textContent = robotID;
-			
-			const cell2 = newRow.insertCell();
-			cell2.id = "td_robot_queueLength_" + robotID;
-			
-			const cell3 = newRow.insertCell();
-			cell3.id = "td_robot_yourPosition_" + robotID;	
-			
-			const cell4 = newRow.insertCell();
-			cell4.id = "td_robot_status_" + robotID;
-			
-			const cell5 = newRow.insertCell();
-			cell5.innerHTML  = "<button id='btn_robot_join" + robotID + "' onClick='joinQueue(" + robotID + ");'>Join</button>";
-			cell5.innerHTML += "<button id='btn_robot_exit" + robotID + "' onClick='exitQueue(" + robotID + ");'>Exit</button>";
-
-			cell5.id = "td_robot_action_" + robotID;
-		}
-	}
-
-	function robotRemove(robotID)  {
-		// delete robots[robotID];
-		document.getElementById('btn_robot_join' + robotID).disabled = true;
-		document.getElementById('td_robot_status_' + robotID).innerText = 'OFFLINE';	
-	}
-
-	function robotUpdate(robotID)  {
-		// document.getElementById('td_robot_id_' + robotID).innerText = robotID;
-		document.getElementById('td_robot_queueLength_' + robotID).innerText = robots[robotID].queueLength;
-		document.getElementById('td_robot_yourPosition_' + robotID).innerText = robots[robotID].yourPosition;
-		document.getElementById('td_robot_status_' + robotID).innerText = robots[robotID].availability.toUpperCase();
-		if (robots[robotID].yourPosition < 0)  {
-			// Not yet in queue			
-			document.getElementById('btn_robot_join' + robotID).disabled = false; 
-			if (activeRobot == robotID)  {  activeRobot = null;  }
-		}  else if (robots[robotID].yourPosition > 0)  {
-			// In queue 
-			if (activeRobot == robotID)  {  activeRobot = null;  }
-			document.getElementById('btn_robot_join' + robotID).disabled = true; 			
-		}  else  {
-			// In service
-			document.getElementById('btn_robot_join' + robotID).disabled = true; 
-		}		
-		// FIXME -- Need to know if robot is paused or running or out-of-service		
-	}
-
-	function joinQueue(robotID)  {
-		// Send a request to HOST server to join this robot's queue
-		socket_host.emit('userreq', ["join", robotID]);		
-	}
-	function exitQueue(robotID)  {
-		// Send a request to HOST server to exit this robot
-		socket_host.emit('userreq', ["exit", robotID]);		
-	}
-	
-	
-
-
-
-	// Robot Controls
-	var joints = ['arm_shoulder_pan_joint', 'arm_shoulder_lift_joint', 'arm_elbow_flex_joint', 'arm_wrist_flex_joint', 'gripper_joint'];
-	
-	var joint = {};
-	for (const j of joints)  {
-		joint[j] = {torque: undefined, angle_deg: undefined, min_angle: undefined, max_angle: undefined, sliding: false};
-	}
-	
-	function slidingOn(j)  {
-		joint[j].sliding = true;
-		document.getElementById('txt_' + j).value = document.getElementById('rng_' + j).value;
-	}
-
-	function slidingOff(j)  {
-		joint[j].sliding = false;
-		document.getElementById('txt_' + j).value = document.getElementById('rng_' + j).value;
-		
-		var cmd = {};
-		cmd[j] = document.getElementById('txt_' + j).value;
-		socket_host.emit('command', [activeRobot, [cmd]]);			
-
-		console.log(cmd);
-	}
-
-	function move()  {
-		var cmd = {};
-		for (const j of joints)  {
-			if (document.getElementById('chk_' + j).checked)  {
-				// console.log(document.getElementById('txt_' + j).value);
-				cmd[j] = document.getElementById('txt_' + j).value;
-			}
-		}
-		console.log(cmd);
-		socket_host.emit('command', [activeRobot, [cmd]]);
-	}
-	
-	function increment(j, degrees)	 {
-		try  {
-			const new_angle = joint[j].angle_deg + degrees;
-			if (joint[j].min_angle <= new_angle && new_angle <= joint[j].max_angle)  {
-				var cmd = {};
-				cmd[j] = new_angle;
-				socket_host.emit('command', [activeRobot, [cmd]]);
-			}  else  {
-				
-			}
-		}  catch (error)  {
-			console.error("Error: ", error.message);
-		}
-	}
-	
-	function relax(j)  {
-		var cmd = {}
-		cmd[j] = true;
-		socket_host.emit('relax', [activeRobot, [cmd]]);
-	}
-	
-	function rigid(j)  {
-		var cmd = {}
-		cmd[j] = false;
-		socket_host.emit('relax', [activeRobot, [cmd]]);			
-	}
-		
-
-
-	function loadFeatures()  {
-		new CameraConfig(feature='aruco', btnDiv='camBtnsDiv', btnText='ArUco', cfgDiv='camConfigDiv', divFunc=arucoConfigDiv);		
-		new CameraConfig(feature='barcode', btnDiv='camBtnsDiv', btnText='Barcode', cfgDiv='camConfigDiv', divFunc=barcodeConfigDiv);		
-		new CameraConfig(feature='facedetect', btnDiv='camBtnsDiv', btnText='Face Detect', cfgDiv='camConfigDiv', divFunc=facedetectConfigDiv);		
-		new CameraConfig(feature='ultra', btnDiv='camBtnsDiv', btnText='Ultralytics', cfgDiv='camConfigDiv', divFunc=ultraConfigDiv);		
-
-		new Stream(1, 'camStreamDiv', 'https://localhost:8001/stream.mjpg');
-		new Stream(2, 'camStreamDiv', 'https://localhost:8002/stream.mjpg');
-		new Stream(3, 'camStreamDiv', 'https://localhost:8003/stream.mjpg');
-	}
-			
-	
-	var socket_host;
-	var socket_client;
-	
-	function connect()  {
-		
-		var host_server   = 'https://' + document.getElementById('host_ip').value + ':' + document.getElementById('host_port').value;
-		var client_server = 'https://' + document.getElementById('client_ip').value + ':' + document.getElementById('client_port').value;
-		
-		document.getElementById('loginBkgrnd').style.display = 'none';
-
-		// Now load the Aruco config and video stream windows.
-		loadFeatures();
-		
-		// This is the server connected to the robot:
-		console.warn('Need to set IP address and port of socket_host');
-		socket_host = io(host_server, {
-			ackTimeout: 10000,
-			retries: 0,
-			auth: {
-			  serverOffset: 0
-			}
-		});	
-		// console.log(socket_host.id);
-
-		// This is your computer:
-		socket_client = io(client_server, {
-			ackTimeout: 10000,
-			retries: 0,
-			auth: {
-			  serverOffset: 0
-			}
-		});	
-		// console.log(socket_client.id);
-
-
-		socket_host.on('notice', (msg) => {
-			// Print "notice" messages in the Notices box
-			// console.log(msg);
-			const newNotice = document.createElement("li");
-			newNotice.textContent = msg;
-			// ul_notices.appendChild(newNotice);
-			ul_notices.insertBefore(newNotice, ul_notices.firstChild);
-		});
-
-		socket_host.on('sessionstart', (msg) => {
-			console.log(msg);
-			/*
-			for (const [key, value] of Object.entries(msg)) {			
-				console.log('sysinfo: ' + `${key}: ${value}`);
-				document.getElementById("span_sessionstart").innerText += key + ':' + value;	
-			}
-			*/
-
-			activeRobot = msg.robotID;
-			document.getElementById('lbl_active_robot').innerText = 'Robot ' + activeRobot;		
-		});
-		
-		socket_host.on('sysinfo', (msg) => {
-			// This will be an array of dictionaries; each dict contains info about a robot.
-			var tmpActiveRobot = null;
-			
-			// console.log(msg);
-			var removedRobotIDs = Object.keys(robots);
-			for (var i = 0; i < msg.length; i++)  {	
-				const robotID = msg[i].id
-				if (robotID in robots)  {
-					// We already knew about this robot.
-					const index = removedRobotIDs.indexOf(robotID);
-					if (index > -1)  {
-						removedRobotIDs.splice(index, 1);
-					}
-					document.getElementById('td_robot_status_' + robotID).innerText = msg[i].availability.toUpperCase();
-				}  else  {
-					// New robot!
-					// console.log('New Robot: ' + msg[i]);
-					robotAdd(robotID, msg[i]);
-				}
-				robots[robotID] = msg[i];
-				robotUpdate(robotID);
-			}
-			for (const robotID of removedRobotIDs)  {
-				console.log('Robot ' + robotID + ' is no longer with us');
-				robotRemove(robotID);
-			}
-		});
-
-		socket_host.on('status', (msg) => {
-			// console.log('robotID: ' + msg[0] + ' joints: ' + msg[1]);
-			var disableMove = true;
-			for (const [key, value] of Object.entries(msg[1])) {
-				// console.log(`${key}: ${value}`);
-				// console.log(key);
-				if (document.getElementById('chk_' + key))  {
-					joint[key].angle_deg = msg[1][key].angle_deg;
-					joint[key].min_angle = msg[1][key].min_angle;
-					joint[key].max_angle = msg[1][key].max_angle;
-					
-					document.getElementById('chk_' + key).disabled = !msg[1][key].OK;
-					document.getElementById('txt_' + key).disabled = !msg[1][key].OK;
-					document.getElementById('rng_' + key).disabled = !msg[1][key].OK;
-					
-					document.getElementById('btn_incr_a_' + key).disabled = !msg[1][key].OK;
-					document.getElementById('btn_incr_b_' + key).disabled = !msg[1][key].OK;
-					
-					document.getElementById('btn_relax_' + key).disabled = !msg[1][key].OK;
-					document.getElementById('btn_rigid_' + key).disabled = !msg[1][key].OK;
-					
-					if (!msg[1][key].OK)  {
-						document.getElementById('chk_' + key).checked = false;
-					}
-					document.getElementById('pos_' + key).textContent = (msg[1][key].angle_deg).toFixed(1);
-					document.getElementById('min_' + key).textContent = (msg[1][key].min_angle).toFixed(1);
-					document.getElementById('max_' + key).textContent = (msg[1][key].max_angle).toFixed(1);
-					
-					document.getElementById('rng_' + key).min   = msg[1][key].min_angle;
-					document.getElementById('rng_' + key).max   = msg[1][key].max_angle;
-					if (!joint[key].sliding)  {
-						document.getElementById('rng_' + key).value = msg[1][key].angle_deg;
-					}
-					
-					if (document.getElementById('chk_' + key).checked)  { disableMove = false; }
-				}  else  {
-					console.log('need to add ' + key + ' to table');
-				}
-			}
-			
-			console.log
-			document.getElementById('btn_robot_move').disabled = disableMove;
-						
-			// console.log('received reply message ' + msg[0]);
-			/*
-			item.textContent = 'Received "reply" message: ' + msg[0].data;
-			messages.appendChild(item);
-			window.scrollTo(0, document.body.scrollHeight);
-			socket.auth.serverOffset = serverOffset;		// Is this necessary?'
-			*/			
-		});
-
-		socket_client.on('camStatus', (msg) => {
-			// console.log(msg[0]);
-			for (var i = 0; i < msg[0].length; i++)  {
-				// console.log(msg[0][i]);
-				if (camStreams[msg[0][i].camID])  {
-					// Already Exists
-					// console.log(camStreams[msg[0][i].camID]);
-				}  else  {
-					// New
-					camStreams[msg[0][i].camID] = msg[0][i];
-					cameraAdd(msg[0][i].camID, msg[0][i]);
-				}
-			}
-		});
-		
-		socket_client.on('notice', (msg) => {
-			// Print "notice" messages in the Notices box
-			// console.log(msg);
-			const newNotice = document.createElement("li");
-			newNotice.textContent = msg;
-			// ul_notices.appendChild(newNotice);
-			ul_notices.insertBefore(newNotice, ul_notices.firstChild);
-		});
-		
-	}
-	
 	document.addEventListener('DOMContentLoaded', function() {
-		// Pre-populate the form with some info that might be correct:
-		document.getElementById('client_ip').value   = window.location.hostname; 
+		document.getElementById('client_ip').value   = window.location.hostname;
 		document.getElementById('client_port').value = window.location.port;
-	}, false);	
-	
-  </script>	
-</html>    
+	}, false);
+  </script>
+</html>

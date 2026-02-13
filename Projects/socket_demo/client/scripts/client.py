@@ -1,61 +1,39 @@
 #!/usr/bin/env python3
 
+import argparse
 import signal
 import time
 import sys, platform
-import numpy as np
-import cv2
+from pathlib import Path
 
-SYSTEM = platform.system()  # Will be "Windows" or something else for Mac/Linux
+# NOTE: Update CODE_PATH to point to the directory where `ub_camera.py` and `ub_utils.py` live.
+CODE_PATH = Path("/home/cmurray3/Projects/IE-482-582/spring2026/Projects/code/")
 
-# FIXME -- Make this generic.
-# FIXME -- Is there a way to do this for both Windows and Mac/Linux?
-CODE_PATH = "/home/cmurray3/Projects/IE-482-582/spring2025/Projects/code"
+LOCAL_SSL_PATH  = CODE_PATH / "ssl"
+FACE_MODEL_PATH = CODE_PATH / "cv2_dnn_models"
 
-# FIXME -- Make these input arguments?
-# Info for HOST socket server:
-HOST_IP = '10.83.11.58'      # '10.83.17.66'
-HOST_PORT = '8085'
+sys.path.append(str(CODE_PATH))
 
-# Info for CLIENT socket server:
-CLIENT_IP = 'localhost'
-CLIENT_PORT = '8080'
-
-# Do you want to run YOUR camera?
-LOCAL_CAM_DEVICE = 0   # None  if you don't want camera, or 0 or '/dev/video0' or 'https://localhost:8000/stream.mjpg'
-LOCAL_CAM_PORT   = 8000
-print(SYSTEM)
-if (SYSTEM == 'Windows'):
-	LOCAL_SSL_PATH = f'{CODE_PATH}\ssl'  
-else:
-	# For Linux/Mac
-	LOCAL_SSL_PATH = f'{CODE_PATH}/ssl'  
-
-
-# FIXME -- This needs to be declared dynamically (as an input from client webpage)
-ROBOT_ID = 1
-
-# Set the path for face detection models:
-if (SYSTEM == 'Windows'):
-	FACE_MODEL_PATH = f'{CODE_PATH}\cv2_dnn_models'
-else:
-	# For Linux/Mac
-	FACE_MODEL_PATH = f'{CODE_PATH}/cv2_dnn_models'
-    
-
-
-STATUS_RATE = 1/5 # [Hz] -- How fast our infinite while loop will run
-
-
-
-
-sys.path.append(CODE_PATH)
 import ub_camera
 import ub_utils
+import cv2
+import numpy as np
 
-# FIXME -- Can we remove the next line now?
-# import socket, errno, time  # For checkPort() function
 
+STATUS_RATE = 1/5  # [Hz] — main loop rate
+
+# ── Default configuration ────────────────────────────────────────────────────
+# Edit these to avoid typing them on the command line every time.
+# Any value can still be overridden at runtime with the corresponding flag.
+
+HOST_IP     = None        # required — no universal default; set this or pass --host-ip
+HOST_PORT   = None        # required — no universal default; set this or pass --host-port
+CLIENT_IP   = 'localhost'
+CLIENT_PORT = 8080
+CAM_DEVICE  = None        # None = no local camera; or 0, '/dev/video0', 'https://...'
+CAM_PORT    = 8000
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 # ----------------------
 import socketio
@@ -116,8 +94,16 @@ class GracefulShutdown:
 
 
 class Main:
-	def __init__(self):
-		# Set the shutdown function
+	def __init__(self, args):
+		# Store CLI configuration
+		self.host_ip     = args.host_ip
+		self.host_port   = args.host_port
+		self.client_ip   = args.client_ip
+		self.client_port = args.client_port
+		self.cam_device  = args.cam_device
+		self.cam_port    = args.cam_port
+
+		# Shutdown handler
 		monitor = GracefulShutdown()
 		monitor.on_shutdown(self.shutdown)
 						
@@ -138,46 +124,44 @@ class Main:
 		def on_message(data):
 			self.callback_status(data)
 			
-		@sio_client.on('blah')
+		@sio_client.on('cam_control')
 		def on_message(data):
-			self.callback_blah(data)
+			self.callback_cam_control(data)
 			                			
+		@sio_client.on('userreq')
+		def on_message(data):
+			# Relay join/exit requests from the browser to the host server.
+			sio_host.emit('userreq', data)
+
 		# Connect to the socket servers
 		try:
-			sio_host.connect(f'https://{HOST_IP}:{HOST_PORT}', transports=['websocket'])
+			sio_host.connect(f'https://{self.host_ip}:{self.host_port}?role=user', transports=['websocket'])
 			print('my host sid is', sio_host.get_sid())
 		except Exception as e:
 			print(f'Could not connect to host socket: {e}')
 
 		try:
-			sio_client.connect(f'https://{CLIENT_IP}:{CLIENT_PORT}', transports=['websocket'])
+			sio_client.connect(f'https://{self.client_ip}:{self.client_port}', transports=['websocket'])
 			print('my client sid is', sio_client.get_sid())
 		except Exception as e:
 			print(f'Could not connect to client socket: {e}')
     
     
-		# Setup Robot data
-		self.joint = {}  #  Will be of the form `self.joint[robotID][jointName]['angle_deg']`
+		self.robot_id = None
+		self.joint    = {}  # self.joint[robotID][jointName]['angle_deg']
 		
-		# Setup Camera
-		# FIXME -- Could be that we tap into an existing stream, or we could start our own camera
-		#          Need to have a command line argument for the device
-		#          Also, we could have multiple cameras
 		self.camera = {}
 		
-		if (LOCAL_CAM_DEVICE is not None):			
+		if self.cam_device is not None:			
 			self.startCamera(camID='local_cam', 
-							 outputPort=LOCAL_CAM_PORT, 
+							 outputPort=self.cam_port,
 							 apiPref=None, 
-							 device=LOCAL_CAM_DEVICE, 
+							 device=self.cam_device,
 							 sslPath=LOCAL_SSL_PATH, 
 							 intrinsics=None)
 		
 		
-		# FIXME -- This should happen dynamically
-		# sio_host.emit('userreq', ["join", ROBOT_ID])
-		
-		sleepTime  = 1/STATUS_RATE # convert Hz to seconds
+		sleepTime = 1/STATUS_RATE   # [seconds]
 
 		while not monitor.is_shutdown:
 			try:
@@ -199,8 +183,7 @@ class Main:
 		self.shutdown()
 		
 
-	# FIXME -- Give this function a propoer name
-	def callback_blah(self, msg):
+	def callback_cam_control(self, msg):
 		'''
 		msg is a list of lists, like [['arucoStart', {'camID': 'robot_1', 'framerate': '5', 'tagType': 'DICT_APRILTAG_36h11', 'action': 'track', 'trackID': '0'}]]
 		
@@ -379,7 +362,7 @@ class Main:
 				
 					
 		except Exception as e:
-			self.pubNotice(f'Error in callback_blah: {e}')
+			self.pubNotice(f'Error in callback_cam_control: {e}')
 				
 
 	def arucoShowIDs(self, argsDict):
@@ -395,8 +378,9 @@ class Main:
 		idName    = argsDict['idName']
 		idToTrack = argsDict['idToTrack']
 
-		# FIXME -- Need to parameterize robotID
-		robotID = 1
+		robotID = self.robot_id
+		if robotID is None:
+			return
 					
 		centers = self.camera[camID].aruco[idName].deque[0]['centers']
 		for i in range(len(centers)):
@@ -471,13 +455,14 @@ class Main:
 
 		try:
 			robotID = data['robotID']
-			
+			self.robot_id = robotID
+
 			# Save robot limits
 			# data['joints'] = {'arm_shoulder_pan_joint': {'id': 1, 'neutral': 0, 'max_angle': 114, 'min_angle': 0, 'max_speed': 300, 'angle_deg': 88.18359375, 'OK': True, 'torque': False, 'angle_rad': 1.5390940571785934}, 'arm_shoulder_lift_joint': {'id': 2, 'neutral': 0, 'max_angle': 160, 'min_angle': 45, 'max_speed': 400, 'angle_deg': 146.48437500000003, 'OK': True, 'torque': False, 'angle_rad': 2.556634646476069}}
 			self.joint[robotID] = data['joints']
 			
 			self.startCamera(camID=f'robot_{robotID}', 
-							 outputPort=LOCAL_CAM_PORT, 
+							 outputPort=self.cam_port,
 							 apiPref=None, 
 							 device=data['cameraURL'], 
 							 sslPath=LOCAL_SSL_PATH, 
@@ -494,7 +479,9 @@ class Main:
 		print(data)
 		'''
 		robotID = data[0]
-		self.joint[robotID] = data[1]   # data['joints']
+		if robotID not in self.joint:
+			return
+		self.joint[robotID] = data[1]
 		
 	def doSomething(self):
 		''' 
@@ -516,9 +503,9 @@ class Main:
 		data = []
 		for camID in self.camera:
 			data.append({'camID': camID, 
-						 'clientIP': CLIENT_IP, 
+						 'clientIP': self.client_ip, 
 						 'outputPort': self.camera[camID].outputPort, 
-						 'url': f'https://{CLIENT_IP}:{self.camera[camID].outputPort}/stream.mjpg', 
+						 'url': f'https://{self.client_ip}:{self.camera[camID].outputPort}/stream.mjpg', 
 						 'streaming': self.camera[camID].keepStreaming})
 		# print(data)
 		sio_client.emit('camStatus', data)
@@ -659,4 +646,34 @@ class Main:
 
 
 if __name__ == "__main__":
-	Main()
+	ap = argparse.ArgumentParser(
+		description='Client-side Python agent for the Arbotix remote control system.'
+	)
+	ap.add_argument('--host-ip',     default=HOST_IP,
+					help='IP address of the host socket server.')
+	ap.add_argument('--host-port',   type=int, default=HOST_PORT,
+					help='Port of the host socket server.')
+	ap.add_argument('--client-ip',   default=CLIENT_IP,
+					help=f'IP of the client socket server (default: {CLIENT_IP}).')
+	ap.add_argument('--client-port', type=int, default=CLIENT_PORT,
+					help=f'Port of the client socket server (default: {CLIENT_PORT}).')
+	ap.add_argument('--cam-device',  default=CAM_DEVICE,
+					help='Local camera: integer index (0), path (/dev/video0), '
+						 'or stream URL. Omit to start without a local camera.')
+	ap.add_argument('--cam-port',    type=int, default=CAM_PORT,
+					help=f'Port for the local camera MJPEG stream (default: {CAM_PORT}).')
+	args = ap.parse_args()
+
+	if args.host_ip is None:
+		ap.error('--host-ip is required (or set HOST_IP at the top of client.py)')
+	if args.host_port is None:
+		ap.error('--host-port is required (or set HOST_PORT at the top of client.py)')
+
+	# Convert a numeric device string to int (e.g. "0" → 0 for cv2.VideoCapture)
+	if args.cam_device is not None:
+		try:
+			args.cam_device = int(args.cam_device)
+		except ValueError:
+			pass
+
+	Main(args)
