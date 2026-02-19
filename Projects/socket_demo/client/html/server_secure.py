@@ -3,7 +3,7 @@
 HTTPS + Socket.IO server (Python replacement for server_secure.cjs).
 
 Dependencies:
-    pip install flask python-socketio gevent gevent-websocket
+    pip install flask python-socketio gevent gevent-websocket cryptography
 
 NOTE: The /proxy/* endpoint from the original Node.js server has been removed.
 If proxy support is needed in the future, implement a Flask /proxy/<path:url>
@@ -12,9 +12,15 @@ route using the `requests` library to forward the request and return the respons
 
 import os
 import socket
-import subprocess
+import datetime
+import ipaddress
 import argparse
 import mimetypes
+
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
@@ -78,15 +84,47 @@ def _ensure_cert():
     if os.path.isfile(SSL_CERT) and os.path.isfile(SSL_KEY) and stamped_ip == ip:
         return ip  # cert is current — nothing to do
 
-    san = f'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:{ip}'
     print(f'Generating SSL cert for IP {ip} ...')
-    subprocess.run([
-        'openssl', 'req', '-x509', '-newkey', 'rsa:2048',
-        '-keyout', SSL_KEY, '-out', SSL_CERT,
-        '-days', '365', '-nodes',
-        '-subj', '/C=US/ST=New York/L=Buffalo/O=University at Buffalo/CN=localhost',
-        '-addext', san,
-    ], check=True, capture_output=True)
+    os.makedirs(os.path.dirname(SSL_CERT), exist_ok=True)
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    name = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME,             'US'),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME,   'New York'),
+        x509.NameAttribute(NameOID.LOCALITY_NAME,            'Buffalo'),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME,        'University at Buffalo'),
+        x509.NameAttribute(NameOID.COMMON_NAME,              'localhost'),
+    ])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=365))
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName('localhost'),
+                x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
+                x509.IPAddress(ipaddress.IPv4Address(ip)),
+            ]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+
+    with open(SSL_KEY, 'wb') as f:
+        f.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+    with open(SSL_CERT, 'wb') as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
     with open(_SSL_IP_STAMP, 'w') as f:
         f.write(ip)
     print(f'SSL cert generated (SANs: localhost, 127.0.0.1, {ip})')
