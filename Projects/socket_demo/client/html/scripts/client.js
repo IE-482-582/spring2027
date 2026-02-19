@@ -347,10 +347,10 @@ function connect()  {
 	// ── Client events ──
 
 	socket_client.on('camStatus', (msg) => {
-		for (var i = 0; i < msg[0].length; i++)  {
-			if (!camStreams[msg[0][i].camID])  {
-				camStreams[msg[0][i].camID] = msg[0][i];
-				cameraAdd(msg[0][i].camID, msg[0][i]);
+		for (var i = 0; i < msg.length; i++)  {
+			if (!camStreams[msg[i].camID])  {
+				camStreams[msg[i].camID] = msg[i];
+				cameraAdd(msg[i].camID, msg[i]);
 			}
 		}
 	});

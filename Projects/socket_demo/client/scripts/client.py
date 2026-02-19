@@ -508,7 +508,7 @@ class Main:
 						 'url': f'https://{self.client_ip}:{self.camera[camID].outputPort}/stream.mjpg', 
 						 'streaming': self.camera[camID].keepStreaming})
 		# print(data)
-		sio_client.emit('camStatus', data)
+		sio_client.emit('camStatus', [data])
 		
 	def startCamera(self, camID, outputPort, apiPref, device, sslPath=None, intrinsics=None):
 		# Initialize `CameraUSB` Class
