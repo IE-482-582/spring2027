@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Arbotix Controller</title>
+    <style>
+      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+	/*
+      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
+      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
+      #input:focus { outline: none; }
+      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+
+      #messages { list-style-type: none; margin: 0; padding: 0; }
+      #messages > li { padding: 0.5rem 1rem; }
+      #messages > li:nth-child(odd) { background: #efefef; }
+	*/
+	
+      #rng_arm_shoulder_pan_joint {
+		direction: rtl;  
+	  }
+	  
+	  h4.subtitle {
+		margin-top: 2px;  
+	  }
+	  .configFloat {
+		position   : absolute;
+		top        : 42px; 
+		left       : 30px;
+		z-index     : 2;
+		background : rgba(42, 42, 42, 0.7);
+		display    : none;
+		color      : white;
+		padding    : 4px;
+		max-height  : 100%;
+		overflow-y  : auto;
+		box-sizing  : border-box;
+	  }  
+
+	  .configInline {
+		background : rgba(42, 42, 42, 0.7);
+		display    : none;
+		color      : white;
+		padding    : 4px;
+		max-height  : 100%;
+		overflow-y  : auto;
+		box-sizing  : border-box;
+	  }  
+	  
+	  .streamParent {
+		float: left;
+		border-style: solid;
+		border-width: 1px;
+		border-radius: 5px;
+		padding: 4px;
+		margin: 4px;  
+	  }
+	  
+	  .camConfigBtn {
+		 width:110px;
+	  }
+
+	  li.notice-error   { color: #c0392b; }
+	  li.notice-warning { color: #e67e22; }
+	  li.notice-info    { color: #555; }
+
+    </style>
+  <script src="/scripts/socket.io.min.js"></script>
+
+  <body>
+	<!--Login Window-->
+	<div id="loginBkgrnd" style="position:absolute;top:0;left:0;width: 100%;height: 100%;background-color: rgba(50, 50, 50, 0.8);z-index: 20;box-sizing: border-box;">
+		<div id="loginSplash" style="padding-top: 5px;background-color: #333333;margin: auto;width: 600px;border: 3px solid black;overflow: auto;text-align: center;color: white;box-sizing: border-box;">
+			<center>
+			<table>
+				<tr>
+					<td>HOST</td>
+					<td>address</td>
+					<td>port</td>
+				</tr>
+				<tr>
+					<td></td>
+					<td>https:// <input type="text" id="host_ip" title="(e.g., 'localhost' or '198.43.82.17')" value="localhost"></td>
+					<td> : <input type="text" id="host_port" title="(e.g., '8085')" style="width:50px;" value="8085"></td>
+				</tr>
+				<tr><td colspan=3>&nbsp;</td></tr>
+				<tr>
+					<td>CLIENT</td>
+					<td>address</td>
+					<td>port</td>
+				</tr>
+				<tr>
+					<td></td>
+					<td>https:// <input type="text" id="client_ip" title="(e.g., 'localhost' or '198.43.82.17')"></td>
+					<td> : <input type="text" id="client_port" title="(e.g., '8080')" style="width:50px;" value="8080"></td>
+				</tr>
+				<tr><td colspan=3>&nbsp;</td></tr>
+				<tr>
+					<td>NAME</td>
+					<td colspan=2><input type="text" id="user_name" title="Display name (optional)" placeholder="optional"></td>
+				</tr>
+				<tr><td colspan=3>&nbsp;</td></tr>
+				<tr><td colspan=3><center><button id="btnGo" onclick="connect();" style="width:100px;">Connect</button></center></td></tr>
+			</table>
+			</center>
+		</div>
+	</div>	  
+	  
+	<div id="noticesDiv" style="padding:10px;">
+		<fieldset style="padding-left:0px;padding-right:0px;overflow-y:auto;max-height:100px;">
+			<legend>Notices (newest messages first)</legend>
+			<ul id="ul_notices"></ul>	
+		</fieldset>	
+	</div>
+	<div id="robotsDiv" style="padding:10px;">
+		<fieldset style="padding-left:0px;padding-right:0px;">
+			<legend>Robots</legend>	
+			<div style="float:left;">
+				<table id="tbl_robots" style="text-align:center;border-width:1px;border-style:solid;border-radius:2px;padding:0px;margin:10px;margin:10px;">
+					<tr style="background-color:#dddddd;">
+						<th>ID</th><th>name</th><th>type</th><th>availability</th><th>queue</th><th>position</th><th>est. wait</th><th>&nbsp;</th>
+					</tr>
+				</table>
+			</div>
+			<div style="float:left;">
+				<table style="border-spacing:0px;border-width:1px;border-style:solid;border-radius:2px;padding:0px;margin:10px;">
+					<!-- -->
+					<tr style="background-color:#3d3d3d;color:white;text-align:center;font-weight:bold;">
+						<td colspan=7 id="lbl_active_robot">&nbsp;</td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td rowspan=3><input type="checkbox" id="chk_arm_shoulder_pan_joint" disabled></td>
+						<td rowspan=3 id="lbl_arm_shoulder_pan_joint">arm_shoulder_pan_joint</td>
+						<td id="max_arm_shoulder_pan_joint"></td><!-- +rotation is ccw, so max is left, min is right-->
+						<td id="pos_arm_shoulder_pan_joint"></td>
+						<td id="min_arm_shoulder_pan_joint"></td>
+						<td rowspan=3><button id="btn_relax_arm_shoulder_pan_joint" onClick="relax('arm_shoulder_pan_joint');" disabled>Relax</button></td>
+						<td rowspan=3><button id="btn_rigid_arm_shoulder_pan_joint" onClick="rigid('arm_shoulder_pan_joint');" disabled>Rigid</button></td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td><button id="btn_incr_a_arm_shoulder_pan_joint" onClick="increment('arm_shoulder_pan_joint', +5);" disabled>Left</button></td><!-- +rotation is ccw, so max is left, min is right-->
+						<td><input type="text" id="txt_arm_shoulder_pan_joint" style="width:70px;" disabled></td>
+						<td><button id="btn_incr_b_arm_shoulder_pan_joint" onClick="increment('arm_shoulder_pan_joint', -5);" disabled>Right</button></td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td colspan=3><input type=range id="rng_arm_shoulder_pan_joint"  onInput="slidingOn('arm_shoulder_pan_joint');" onChange="slidingOff('arm_shoulder_pan_joint');" disabled></td>
+					</tr>				
+					<!-- -->
+					<tr>
+						<td rowspan=3><input type="checkbox" id="chk_arm_shoulder_lift_joint" disabled></td>
+						<td rowspan=3 id="lbl_arm_shoulder_lift_joint">arm_shoulder_lift_joint</td>
+						<td id="min_arm_shoulder_lift_joint"></td>
+						<td id="pos_arm_shoulder_lift_joint"></td>
+						<td id="max_arm_shoulder_lift_joint"></td>
+						<td rowspan=3><button id="btn_relax_arm_shoulder_lift_joint" onClick="relax('arm_shoulder_lift_joint');" disabled>Relax</button></td>
+						<td rowspan=3><button id="btn_rigid_arm_shoulder_lift_joint" onClick="rigid('arm_shoulder_lift_joint');" disabled>Rigid</button></td>
+					</tr>
+					<tr>
+						<td><button id="btn_incr_a_arm_shoulder_lift_joint" onClick="increment('arm_shoulder_lift_joint', -5);" disabled>back</button></td>
+						<td><input type="text" id="txt_arm_shoulder_lift_joint" style="width:70px;" disabled></td>
+						<td><button id="btn_incr_b_arm_shoulder_lift_joint" onClick="increment('arm_shoulder_lift_joint', +5);" disabled>fwd</button></td>
+					</tr>
+					<tr>
+						<td colspan=3><input type=range id="rng_arm_shoulder_lift_joint" onInput="slidingOn('arm_shoulder_lift_joint');" onChange="slidingOff('arm_shoulder_lift_joint');" disabled></td>
+					</tr>				
+					<!-- -->			
+					<tr style="background-color:#dddddd;">
+						<td rowspan=3><input type="checkbox" id="chk_arm_elbow_flex_joint" disabled></td>
+						<td rowspan=3 id="lbl_arm_elbow_flex_joint">arm_elbow_flex_joint</td>
+						<td id="min_arm_elbow_flex_joint"></td>
+						<td id="pos_arm_elbow_flex_joint"></td>
+						<td id="max_arm_elbow_flex_joint"></td>
+						<td rowspan=3><button id="btn_relax_arm_elbow_flex_joint" onClick="relax('arm_elbow_flex_joint');" disabled>Relax</button></td>
+						<td rowspan=3><button id="btn_rigid_arm_elbow_flex_joint" onClick="rigid('arm_elbow_flex_joint');" disabled>Rigid</button></td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td><button id="btn_incr_a_arm_elbow_flex_joint" onClick="increment('arm_elbow_flex_joint', -5);" disabled>extend</button></td>
+						<td><input type="text" id="txt_arm_elbow_flex_joint" style="width:70px;" disabled></td>
+						<td><button id="btn_incr_b_arm_elbow_flex_joint" onClick="increment('arm_elbow_flex_joint', +5);" disabled>close</button></td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td colspan=3><input type=range id="rng_arm_elbow_flex_joint" onInput="slidingOn('arm_elbow_flex_joint');" onChange="slidingOff('arm_elbow_flex_joint');" disabled></td>
+					</tr>				
+					<!-- -->	
+					<tr>
+						<td rowspan=3><input type="checkbox" id="chk_arm_wrist_flex_joint" disabled></td>
+						<td rowspan=3 id="lbl_arm_wrist_flex_joint">arm_wrist_flex_joint</td>
+						<td id="min_arm_wrist_flex_joint"></td>
+						<td id="pos_arm_wrist_flex_joint"></td>
+						<td id="max_arm_wrist_flex_joint"></td>
+						<td rowspan=3><button id="btn_relax_arm_wrist_flex_joint" onClick="relax('arm_wrist_flex_joint');" disabled>Relax</button></td>
+						<td rowspan=3><button id="btn_rigid_arm_wrist_flex_joint" onClick="rigid('arm_wrist_flex_joint');" disabled>Rigid</button></td>
+					</tr>
+					<tr>
+						<td><button id="btn_incr_a_arm_wrist_flex_joint" onClick="increment('arm_wrist_flex_joint', -5);" disabled>back</button></td>
+						<td><input type="text" id="txt_arm_wrist_flex_joint" style="width:70px;" disabled></td>
+						<td><button id="btn_incr_b_arm_wrist_flex_joint" onClick="increment('arm_wrist_flex_joint', +5);" disabled>down</button></td>
+					</tr>
+					<tr>
+						<td colspan=3><input type=range id="rng_arm_wrist_flex_joint" onInput="slidingOn('arm_wrist_flex_joint');" onChange="slidingOff('arm_wrist_flex_joint');" disabled></td>
+					</tr>				
+					<!-- -->			
+					<tr style="background-color:#dddddd;">
+						<td rowspan=3><input type="checkbox" id="chk_gripper_joint" disabled></td>
+						<td rowspan=3 id="lbl_gripper_joint">gripper_joint</td>
+						<td id="min_gripper_joint"></td>
+						<td id="pos_gripper_joint"></td>
+						<td id="max_gripper_joint"></td>
+						<td rowspan=3><button id="btn_relax_gripper_joint" onClick="relax('gripper_joint');" disabled>Relax</button></td>
+						<td rowspan=3><button id="btn_rigid_gripper_joint" onClick="rigid('gripper_joint');" disabled>Rigid</button></td>					
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td><button id="btn_incr_a_gripper_joint" onClick="increment('gripper_joint', -5);" disabled>close</button></td>
+						<td><input type="text" id="txt_gripper_joint" style="width:70px;" disabled></td>
+						<td><button id="btn_incr_b_gripper_joint" onClick="increment('gripper_joint', +5);" disabled>open</button></td>
+					</tr>
+					<tr style="background-color:#dddddd;">
+						<td colspan=3><input type=range id="rng_gripper_joint" onInput="slidingOn('gripper_joint');" onChange="slidingOff('gripper_joint');" disabled></td>
+					</tr>
+					<!-- -->						
+					<tr>
+						<td colspan=7><center><button id="btn_robot_move" onClick="move();" disabled>Move</button></center></td>
+					</tr>				
+				</table>
+			</div>
+		</fieldset>
+	</div>
+	<div style="padding:10px;clear:both;">
+		<fieldset>
+			<legend>Camera Config</legend>
+			<div style="float:left;padding:10px;">
+				<table id="tbl_cameras" style="text-align:center;border-width:1px;border-style:solid;border-radius:2px;padding:0px;margin:10px;margin:10px;">
+					<tr style="background-color:#dddddd;">
+						<th>camID</th><th>url</th><th colspan=2>&nbsp;</th>
+					</tr>
+				</table>
+			</div>			
+			<div id="camBtnsDiv" style="float:left;padding:10px;max-width:120px;"></div>
+			<div id="camConfigDiv" style="float:left;padding:10px;"></div>
+		</fieldset>
+	</div>
+	<div style="padding:10px;">
+		<fieldset>
+			<legend>Camera Streams</legend>
+			<div id="camStreamDiv" style="padding:10px;"></div>
+		</fieldset>
+	</div>
+  </body>
+  <script src="scripts/cam_features.js"></script>
+  <script src="scripts/cam_stream.js"></script>
+  <script src="scripts/client.js"></script>
+  <script>
+	document.addEventListener('DOMContentLoaded', function() {
+		document.getElementById('client_ip').value   = window.location.hostname;
+		document.getElementById('client_port').value = window.location.port;
+	}, false);
+  </script>
+</html>

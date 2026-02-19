@@ -11,6 +11,8 @@ route using the `requests` library to forward the request and return the respons
 """
 
 import os
+import socket
+import subprocess
 import argparse
 import mimetypes
 
@@ -48,6 +50,47 @@ TILESET_EXTS = {'.b3dm', '.pnts', '.i3dm', '.cmpt', '.glb', '.geom', '.vctr'}
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SSL_CERT   = os.path.join(SCRIPT_DIR, 'ssl', 'ca.crt')
 SSL_KEY    = os.path.join(SCRIPT_DIR, 'ssl', 'ca.key')
+_SSL_IP_STAMP = os.path.join(SCRIPT_DIR, 'ssl', 'ca.ip')
+
+
+def _lan_ip():
+    """Return the machine's primary outbound LAN IPv4, or '127.0.0.1' on failure."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '127.0.0.1'
+
+
+def _ensure_cert():
+    """Generate (or regenerate) the SSL cert when the machine's IP has changed."""
+    ip = _lan_ip()
+
+    # Read the IP the cert was last built for, if any.
+    try:
+        stamped_ip = open(_SSL_IP_STAMP).read().strip()
+    except FileNotFoundError:
+        stamped_ip = None
+
+    if os.path.isfile(SSL_CERT) and os.path.isfile(SSL_KEY) and stamped_ip == ip:
+        return ip  # cert is current — nothing to do
+
+    san = f'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:{ip}'
+    print(f'Generating SSL cert for IP {ip} ...')
+    subprocess.run([
+        'openssl', 'req', '-x509', '-newkey', 'rsa:2048',
+        '-keyout', SSL_KEY, '-out', SSL_CERT,
+        '-days', '365', '-nodes',
+        '-subj', '/C=US/ST=New York/L=Buffalo/O=University at Buffalo/CN=localhost',
+        '-addext', san,
+    ], check=True, capture_output=True)
+    with open(_SSL_IP_STAMP, 'w') as f:
+        f.write(ip)
+    print(f'SSL cert generated (SANs: localhost, 127.0.0.1, {ip})')
+    return ip
 
 
 # ── Socket.IO server ──────────────────────────────────────────────────────────
@@ -118,9 +161,12 @@ if __name__ == '__main__':
                     help='Listen on all interfaces (default: localhost only).')
     args = ap.parse_args()
 
-    host  = '0.0.0.0' if args.public else 'localhost'
-    scope = 'publicly' if args.public else 'locally'
+    lan_ip = _ensure_cert()
+    host   = '0.0.0.0' if args.public else 'localhost'
+    scope  = 'publicly' if args.public else 'locally'
     print(f'Dev server running {scope}.  Connect to https://localhost:{args.port}/')
+    if args.public:
+        print(f'Also reachable at https://{lan_ip}:{args.port}/')
 
     server = pywsgi.WSGIServer(
         (host, args.port), wsgi_app,
