@@ -26,3 +26,4 @@ zzz_*
 
 **/venvs/**
 
+**/client/html/ssl/ca.*
