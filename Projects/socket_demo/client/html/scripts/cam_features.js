@@ -279,10 +279,68 @@ class CameraConfig  {
 	}
 }
 
+
+// ─── Local Camera ─────────────────────────────────────────────────────────────
+
+function localCameraConfigDiv()  {
+	var html =  '<h4 class="subtitle">Local Camera Config</h4>' +
+				'<table>' +
+				'	<tr><td>camID:</td><td><input type="text" id="localCamID" value="local_cam" placeholder="local_cam"></td></tr>' +
+				'	<tr><td>Output Port:</td><td><input type="number" id="localCamPort" value="8000" placeholder="8000"></td></tr>' +
+				'	<tr><td>Device:</td><td><input type="text" id="localCamDevice" value="0" placeholder="0 or /dev/video0"></td></tr>' +
+				'	<tr><td>Resolution:</td><td><select id="localCamResolution">' +
+				'									<option value="320x240">320x240</option>' +
+				'									<option value="640x480" selected>640x480</option>' +
+				'									<option value="800x600">800x600</option>' +
+				'									<option value="1280x720">1280x720</option>' +
+				'									<option value="1920x1080">1920x1080</option>' +
+				'									</select></td></tr>' +
+				'	<tr><td colspan=2><center>' +
+				'		<button id="btnLocalCameraStart" onClick="localCameraStart();">Start Camera</button>' +
+				'		<button id="btnLocalCameraStop" onClick="localCameraStop();">Stop Camera</button>' +
+				'		<button id="btnLocalCameraRestart" onClick="localCameraRestart();">Restart Camera</button>' +
+				'	</center></td></tr>' +
+				'</table>';
+	return html;
+}
+
+
+function localCameraStart()  {
+	var data = {};
+	data.camID = document.getElementById('localCamID').value;
+	data.outputPort = parseInt(document.getElementById('localCamPort').value);
+	data.device = document.getElementById('localCamDevice').value;
+	data.resolution = document.getElementById('localCamResolution').value;
+
+	console.log('Starting local camera:', data);
+	socket_client.emit('cam_control', ['localCameraStart', data]);
+}
+
+function localCameraStop()  {
+	var data = {};
+	data.camID = document.getElementById('localCamID').value;
+
+	console.log('Stopping local camera:', data);
+	socket_client.emit('cam_control', ['localCameraStop', data]);
+}
+
+function localCameraRestart()  {
+	var data = {};
+	data.camID = document.getElementById('localCamID').value;
+	data.outputPort = parseInt(document.getElementById('localCamPort').value);
+	data.device = document.getElementById('localCamDevice').value;
+	data.resolution = document.getElementById('localCamResolution').value;
+
+	console.log('Restarting local camera:', data);
+	socket_client.emit('cam_control', ['localCameraRestart', data]);
+}
+
+
 // ─── Feature registration ─────────────────────────────────────────────────────
 // Add a new CameraConfig line here for each feature you create.
 
 function loadFeatures()  {
+	new CameraConfig(feature='localcam',   btnDiv='camBtnsDiv', btnText='Local Camera',  cfgDiv='camConfigDiv', divFunc=localCameraConfigDiv);
 	new CameraConfig(feature='aruco',      btnDiv='camBtnsDiv', btnText='ArUco',         cfgDiv='camConfigDiv', divFunc=arucoConfigDiv);
 	new CameraConfig(feature='barcode',    btnDiv='camBtnsDiv', btnText='Barcode',        cfgDiv='camConfigDiv', divFunc=barcodeConfigDiv);
 	new CameraConfig(feature='facedetect', btnDiv='camBtnsDiv', btnText='Face Detect',    cfgDiv='camConfigDiv', divFunc=facedetectConfigDiv);

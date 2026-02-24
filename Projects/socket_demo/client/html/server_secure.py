@@ -27,6 +27,7 @@ from geventwebsocket.handler import WebSocketHandler
 import socketio
 from flask import Flask, send_from_directory, make_response
 
+import ub_utils
 
 # ── Custom MIME types (mirrors the original server_secure.cjs configuration) ──
 _CUSTOM_MIME_TYPES = {
@@ -192,24 +193,26 @@ wsgi_app = socketio.WSGIApp(sio, flask_app)
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    ap = argparse.ArgumentParser(description='HTTPS + Socket.IO server.')
-    ap.add_argument('--port',   type=int,          default=8080,
-                    help='Port to listen on (default: 8080).')
-    ap.add_argument('--public', action='store_true',
-                    help='Listen on all interfaces (default: localhost only).')
-    args = ap.parse_args()
+	ap = argparse.ArgumentParser(description='HTTPS + Socket.IO server.')
+	ap.add_argument('--port',   type=int,          default=8080,
+					help='Port to listen on (default: 8080).')
+	ap.add_argument('--public', action='store_true',
+					help='Listen on all interfaces (default: localhost only).')
+	args = ap.parse_args()
 
-    lan_ip = _ensure_cert()
-    host   = '0.0.0.0' if args.public else 'localhost'
-    scope  = 'publicly' if args.public else 'locally'
-    print(f'Dev server running {scope}.  Connect to https://localhost:{args.port}/')
-    if args.public:
-        print(f'Also reachable at https://{lan_ip}:{args.port}/')
+	lan_ip = _ensure_cert()
+	host   = '0.0.0.0' if args.public else 'localhost'
+	scope  = 'publicly' if args.public else 'locally'
 
-    server = pywsgi.WSGIServer(
-        (host, args.port), wsgi_app,
-        handler_class=WebSocketHandler,
-        keyfile=SSL_KEY,
-        certfile=SSL_CERT,
-    )
-    server.serve_forever()
+	port = ub_utils.findOpenPort(args.port, options=range(8080,8090))
+	print(f'Dev server running {scope}.  Connect to https://localhost:{port}/')
+	if args.public:
+		print(f'Also reachable at https://{lan_ip}:{port}/')
+
+	server = pywsgi.WSGIServer(
+		(host, port), wsgi_app,
+		handler_class=WebSocketHandler,
+		keyfile=SSL_KEY,
+		certfile=SSL_CERT,
+	)
+	server.serve_forever()

@@ -40,7 +40,7 @@ function fmtWait(sec)  {
 
 // ─── Camera table ─────────────────────────────────────────────────────────────
 
-function cameraAdd(camID, msg)  {
+function cameraAdd(camID, msg, source = 'client')  {
 	const table  = document.getElementById("tbl_cameras");
 	const newRow = table.insertRow();
 
@@ -59,10 +59,13 @@ function cameraAdd(camID, msg)  {
 	cell4.innerHTML = "<button id='btn_camera_watch" + camID + "' onClick='cameraStream(\"" + camID + "\");'>Stream</button>";
 	cell4.id = "td_robot_action_" + camID;
 
-	addToSelectList('arucoCamID',      camID);
-	addToSelectList('barcodeCamID',    camID);
-	addToSelectList('facedetectCamID', camID);
-	addToSelectList('ultraCamID',      camID);
+	// Only add client cameras to CV feature select lists (host cameras are not accessible to client.py)
+	if (source === 'client')  {
+		addToSelectList('arucoCamID',      camID);
+		addToSelectList('barcodeCamID',    camID);
+		addToSelectList('facedetectCamID', camID);
+		addToSelectList('ultraCamID',      camID);
+	}
 }
 
 function cameraStream(camID)  {
@@ -318,6 +321,12 @@ function connect()  {
 			if (btn)  { btn.innerText = 'hide'; }
 		}
 
+		const camID = 'robot_' + msg.robotID;
+		if (msg.cameraURL && !camStreams[camID])  {
+			camStreams[camID] = { camID, url: msg.cameraURL };
+			cameraAdd(camID, { url: msg.cameraURL }, 'host');
+		}
+
 		if (msg.joints)  { applyJointStatus(msg.joints); }
 	});
 
@@ -350,7 +359,7 @@ function connect()  {
 		for (var i = 0; i < msg.length; i++)  {
 			if (!camStreams[msg[i].camID])  {
 				camStreams[msg[i].camID] = msg[i];
-				cameraAdd(msg[i].camID, msg[i]);
+				cameraAdd(msg[i].camID, msg[i], 'client');
 			}
 		}
 	});
