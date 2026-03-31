@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UB Racer</title>
+  <style>
+    /* ── Reset & base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      padding: 1rem;
+    }
+    h1, h2, h3 { margin: 0 0 0.5rem; }
+    button {
+      cursor: pointer;
+      padding: 0.4rem 1rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    button:disabled { opacity: 0.4; cursor: default; }
+    input[type="text"] {
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: #222;
+      color: #eee;
+      font-size: 1rem;
+    }
+    select {
+      padding: 0.35rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: #222;
+      color: #eee;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .card {
+      background: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Login view ─────────────────────────────────────────────────────── */
+    #login-view {
+      max-width: 380px;
+      margin: 4rem auto;
+      text-align: center;
+    }
+    #login-view h1 { font-size: 2.2rem; margin-bottom: 0.25rem; }
+    #login-view p  { color: #888; margin-bottom: 1.5rem; }
+    #login-view input { width: 100%; margin-bottom: 0.75rem; }
+    #login-btn {
+      width: 100%;
+      background: #2563eb;
+      color: #fff;
+      padding: 0.6rem;
+      font-size: 1rem;
+    }
+    #login-btn:hover:not(:disabled) { background: #1d4ed8; }
+    #login-error { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2em; }
+
+    /* ── Status bar ─────────────────────────────────────────────────────── */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 1rem;
+      background: #1a1a2e;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    #status-bar .username { font-weight: bold; color: #60a5fa; }
+    #status-bar .host-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #555;
+      flex-shrink: 0;
+    }
+    #status-bar .host-dot.connected { background: #4ade80; }
+    #status-text { flex: 1; }
+
+    /* ── Cars table ─────────────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #2a2a2a; }
+    th { color: #888; font-weight: normal; }
+    tr:last-child td { border-bottom: none; }
+
+    .status-free      { color: #4ade80; }
+    .status-in_use    { color: #facc15; }
+    .status-offline   { color: #555; }
+    .avail-available  { color: #4ade80; }
+    .avail-admin_only { color: #f97316; }
+    .avail-off        { color: #555; }
+    .my-pos           { color: #60a5fa; font-weight: bold; }
+
+    /* ── Queue controls ─────────────────────────────────────────────────── */
+    #queue-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    #join-btn  { background: #16a34a; color: #fff; }
+    #join-btn:hover:not(:disabled)  { background: #15803d; }
+    #leave-btn { background: #dc2626; color: #fff; }
+    #leave-btn:hover:not(:disabled) { background: #b91c1c; }
+
+    /* ── Session panel ──────────────────────────────────────────────────── */
+    #session-panel { display: none; }
+    #session-header {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    #countdown {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #facc15;
+    }
+    #countdown.urgent { color: #f87171; }
+    #session-meta { font-size: 0.82rem; color: #888; }
+    #camera-feed {
+      display: none;
+      width: 100%;
+      max-width: 640px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      margin: 0.5rem 0;
+    }
+    #telemetry-row {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-top: 0.25rem;
+    }
+    #telemetry-row span { font-family: monospace; color: #eee; }
+
+    /* ── Drive controls hint ────────────────────────────────────────────── */
+    #drive-hint {
+      font-size: 0.8rem;
+      color: #555;
+      margin-top: 0.5rem;
+    }
+    #drive-hint.active { color: #4ade80; }
+
+    /* ── Confirm overlay ────────────────────────────────────────────────── */
+    #confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #confirm-dialog {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 2rem;
+      text-align: center;
+      max-width: 360px;
+      width: 90%;
+    }
+    #confirm-dialog h2 { color: #facc15; font-size: 1.6rem; }
+    #confirm-dialog p  { color: #aaa; margin: 0.25rem 0; }
+    #confirm-timer { font-size: 2rem; font-weight: bold; color: #f87171; margin: 0.75rem 0; }
+    #confirm-btn {
+      background: #16a34a;
+      color: #fff;
+      font-size: 1.1rem;
+      padding: 0.6rem 2rem;
+      border-radius: 6px;
+    }
+    #confirm-btn:hover { background: #15803d; }
+
+    /* ── Notices ────────────────────────────────────────────────────────── */
+    #notices-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    #notices-row .card {
+      flex: 1;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .notices-log {
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 0.82rem;
+      font-family: monospace;
+    }
+    .notice      { padding: 0.2rem 0; border-bottom: 1px solid #1a1a1a; }
+    .sev-0, .sev-1, .sev-2, .sev-3 { color: #f87171; }   /* emergency–error */
+    .sev-4       { color: #fb923c; }                        /* warning */
+    .sev-5       { color: #60a5fa; }                        /* notice */
+    .sev-6       { color: #9ca3af; }                        /* info */
+    .sev-7       { color: #4b5563; }                        /* debug */
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN VIEW ══════════════════════════════════════════════════════════ -->
+<div id="login-view">
+  <h1>🏎 UB Racer</h1>
+  <p>Enter your username to join the queue.</p>
+  <input id="username-input" type="text" placeholder="Username" autocomplete="off" />
+  <button id="login-btn">Login</button>
+  <div id="login-error"></div>
+</div>
+
+<!-- ══ MAIN VIEW (hidden until login) ═════════════════════════════════════ -->
+<div id="main-view" style="display:none">
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    <div class="host-dot" id="host-dot"></div>
+    <span class="username" id="username-display"></span>
+    <span id="status-text">Connecting to host…</span>
+  </div>
+
+  <!-- Cars table -->
+  <div class="card">
+    <h3>Cars</h3>
+    <table id="cars-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Availability</th>
+          <th>Status</th>
+          <th>Queue</th>
+          <th>Est. wait</th>
+          <th>Your pos.</th>
+        </tr>
+      </thead>
+      <tbody id="cars-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Queue controls -->
+  <div class="card">
+    <h3>Queue</h3>
+    <div id="queue-controls">
+      <label for="car-pref">Car preference:</label>
+      <select id="car-pref">
+        <option value="">Any car</option>
+      </select>
+      <button id="join-btn">Join Queue</button>
+      <button id="leave-btn" disabled>Leave / Exit Session</button>
+    </div>
+  </div>
+
+  <!-- Session panel -->
+  <div class="card" id="session-panel">
+    <div id="session-header">
+      <h3 id="session-car-name">Session</h3>
+      <div id="countdown">--:--</div>
+    </div>
+    <div id="session-meta"></div>
+    <img id="camera-feed" alt="Car camera feed" />
+    <div id="telemetry-row">
+      Steering: <span id="tel-steering">—</span>
+      &nbsp; Throttle: <span id="tel-throttle">—</span>
+      &nbsp; Compass: <span id="tel-compass">—</span>
+    </div>
+    <div id="drive-hint">Arrow keys to drive (active when session is live)</div>
+  </div>
+
+  <!-- Notices -->
+  <div id="notices-row">
+    <div class="card">
+      <h3>Host Notices</h3>
+      <div id="host-notices-log" class="notices-log"></div>
+    </div>
+    <div class="card">
+      <h3>Controller</h3>
+      <div id="local-notices-log" class="notices-log"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ CONFIRM OVERLAY ════════════════════════════════════════════════════ -->
+<div id="confirm-overlay">
+  <div id="confirm-dialog">
+    <h2>Your turn!</h2>
+    <p id="confirm-car-name"></p>
+    <p>Confirm within</p>
+    <div id="confirm-timer">60</div>
+    <p>seconds or you'll be moved to the back of the queue.</p>
+    <br />
+    <button id="confirm-btn">Confirm — I'm Ready!</button>
+  </div>
+</div>
+
+<script src="/index.js"></script>
+</body>
+</html>
