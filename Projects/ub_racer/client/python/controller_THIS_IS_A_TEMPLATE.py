@@ -184,7 +184,10 @@ def on_session_start(data: dict) -> None:
 	
 	port = ub_utils.findOpenPort(8000, options=range(8000,8011))
 	
-	cam[data['carID']] = ub_camera.CameraUSB(device=data['mjpegURL'])
+	device = data['mjpegURL']
+	if isinstance(device, str) and device.isdigit():
+		device = int(device)
+	cam[data['carID']] = ub_camera.CameraUSB(device=device)
 
 	if data.get('cameraIntrinsics'):
 		for res, params in data['cameraIntrinsics'].items():
