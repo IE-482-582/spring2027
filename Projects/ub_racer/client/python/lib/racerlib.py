@@ -28,12 +28,12 @@ _SSL_CTX.check_hostname = False
 _SSL_CTX.verify_mode    = ssl.CERT_NONE
 
 
-def _auto_server_url() -> str:
+def _auto_server_url(port: int = 8443) -> str:
     """Return the server.py WebSocket URL for this machine."""
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
-    return f"wss://{ip}:8443/ws?role=controller"
+    return f"wss://{ip}:{port}/ws?role=controller"
 
 
 # ── Racer ──────────────────────────────────────────────────────────────────────
@@ -64,7 +64,10 @@ class Racer:
         on_telemetry=None,
         on_system_status=None,
         on_confirm_required=None,
+        on_params=None,
+        on_estop=None,
         dev=False,
+        port=8443,
         server=None,
     ):
         """
@@ -87,10 +90,22 @@ class Racer:
             Called when the system asks you to confirm readiness.
             If omitted, the framework auto-confirms on your behalf.
             data — {carID, carName, timeoutSec}.
+        on_params : callable(data), optional
+            Called when the browser sends new algorithm parameters via the
+            Algo Params panel.  data — full algo_params payload.
+        on_estop : callable(isDriving: bool), optional
+            Called when the browser toggles the E-Stop button.
+            isDriving=False means E-Stop is active (stop driving);
+            isDriving=True means driving is re-enabled.
+            When isDriving=False, racerlib automatically issues drive(0, 0)
+            before invoking this callback.
         dev : bool
             Run in dev mode — no host connection required.
             conn.drive() prints commands to the browser console instead of
             sending them to the car.
+        port : int, optional
+            Port that server.py is listening on.  Default: 8443.
+            Ignored if server= is supplied explicitly.
         server : str, optional
             WebSocket URL of server.py.  Auto-detected if omitted.
             Example: "wss://10.0.0.5:8443/ws?role=controller"
@@ -101,10 +116,12 @@ class Racer:
         self._on_telemetry        = on_telemetry
         self._on_system_status    = on_system_status
         self._on_confirm_required = on_confirm_required  # None → auto-confirm
+        self._on_params           = on_params
+        self._on_estop            = on_estop
 
         # Config
         self._dev        = dev
-        self._server_url = server or _auto_server_url()
+        self._server_url = server or _auto_server_url(port)
 
         # Internal state (only touched from the event-loop thread once started,
         # except _should_stop which is set before scheduling the stop coroutine)
@@ -179,13 +196,26 @@ class Racer:
         Parameters
         ----------
         steering : float
-            Degrees — negative = left, positive = right.
-            Typical hardware limits: ±30°.  Full software range: ±90°.
+            User scale [-100, +100]. Negative = left, positive = right.
+            The car maps this proportionally to its hardware steering range.
         throttle : float
-            Percent — negative = reverse, positive = forward.
-            Range: −100 to 100.
+            User scale [-100, +100]. Negative = reverse, positive = forward.
+            The car maps this proportionally to its hardware throttle range.
         """
         self._schedule(self._send_drive(steering, throttle))
+
+    def set_camera_url(self, url: str) -> None:
+        """Send the camera stream URL to the browser for display.
+
+        Call this from on_session_start after your camera stream is ready.
+
+        Parameters
+        ----------
+        url : str
+            Publicly reachable MJPEG stream URL, e.g.
+            "https://192.168.0.10:8001/stream".
+        """
+        self._schedule(self._send_camera_url(url))
 
     def notice(self, severity: int, text: str) -> None:
         """Send a message to the browser console (index.html notices panel).
@@ -199,7 +229,7 @@ class Racer:
     def start_dev_session(
         self,
         camera_url: str,
-        steering_limits: tuple = (-90, 90),
+        steering_limits: tuple = (-100, 100),
         throttle_limits: tuple = (-100, 100),
         time_limit_sec: float = None,
     ) -> None:
@@ -214,9 +244,9 @@ class Racer:
         camera_url : str
             MJPEG stream URL to use as the camera feed.
         steering_limits : (min, max) tuple of float
-            Software steering limits in degrees.  Default: (-90, 90).
+            Steering limits in user scale [-100, +100].  Default: (-100, 100).
         throttle_limits : (min, max) tuple of float
-            Software throttle limits in percent.  Default: (-100, 100).
+            Throttle limits in user scale [-100, +100].  Default: (-100, 100).
         time_limit_sec : float, optional
             Session time limit in seconds.  None means no limit.
         """
@@ -330,6 +360,17 @@ class Racer:
                 print(f"[racer] Confirm required for {msg.get('carName')} — auto-confirming.")
                 await self._send_user_request("confirm")
 
+        elif t == "algo_params":
+            if self._on_params:
+                self._on_params(msg)
+
+        elif t == "e_stop":
+            is_driving = msg.get("isDriving", True)
+            if not is_driving:
+                await self._send_drive(0, 0)
+            if self._on_estop:
+                self._on_estop(is_driving)
+
         elif t == "host_notice":
             sev = msg.get("severity", 6)
             if sev <= 4:  # WARNING and above
@@ -355,6 +396,9 @@ class Racer:
                 "steering": float(steering),
                 "throttle": float(throttle),
             })
+
+    async def _send_camera_url(self, url: str) -> None:
+        await self._send({"type": "camera_url", "url": url})
 
     async def _send_notice(self, severity: int, text: str) -> None:
         await self._send({"type": "local_notice", "severity": severity, "text": text})

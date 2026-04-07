@@ -45,6 +45,10 @@ Controllers connect with `?role=controller`; browsers connect without a role.
 | `drive` | `{steering: float, throttle: float}` | browser or controller | Forwarded to car WebSocket with session token |
 | `user_request` | `{action: "join"\|"exit"\|"confirm", carPreference?: carID}` | browser or controller | Forwarded to host via Socket.IO |
 | `local_notice` | `{severity: 0–7, text: str}` | controller only | Broadcast to browsers only (not echoed to controllers) |
+| `algo_params` | `{cropTop, cropBottom, color: {h,s,v}, hueTolerance: {min,max}, satTolerance: {min,max}, valTolerance: {min,max}, maxThrottle, steeringPerPixel}` | browser only | Forwarded to controllers only |
+| `camera_url` | `{url: str}` | controller only | Forwarded to browsers only |
+| `dev_session_start` | `{carID, mjpegURL, steeringLimits: {min,max}, throttleLimits: {min,max}, timeLimitSec, cameraIntrinsics}` | browser only | DEV_MODE only — server synthesises and broadcasts `session_start` |
+| `dev_session_stop` | `{}` | browser only | DEV_MODE only — server broadcasts `session_end` |
 
 ### 2b. server.py → browser / controller
 
@@ -60,6 +64,8 @@ unless noted.
 | `host_notice` | `{severity, text, carID}` | host (forwarded) | |
 | `telemetry` | `{carID, timestamp, steering, throttle, compass}` | car WS (forwarded) | |
 | `local_notice` | `{severity, text}` | controller (forwarded) | **Browsers only** — not re-sent to controllers |
+| `algo_params` | (pass-through) | browser (forwarded) | **Controllers only** — not re-sent to browsers |
+| `camera_url` | `{url: str}` | controller (forwarded) | **Browsers only** — controller calls `conn.set_camera_url(url)` after its camera stream is ready; browser sets `<img src>` |
 
 ---
 
@@ -93,20 +99,13 @@ no host connection is available.  Changes to the message layer:
 
 ### 4b. Deferred — browser-side dev mode
 
-The following require changes to `server.py` and `index.html`/`index.js` and
-are intentionally out of scope for the current task:
+1. **Browser form → dev session** — ✅ Implemented: `dev_session_start` /
+   `dev_session_stop` messages; Dev card form in `index.html`; handlers in
+   `server.py`; wiring in `index.js` (Step 6).
 
-1. **Browser form → dev session** — a form in `index.html` lets the user supply
-   `camera_url`, `steering_limits`, `throttle_limits` directly in the browser.
-   server.py receives a new inbound message (e.g., `dev_session_config`) and
-   synthesises + broadcasts a `session_start`-shaped message so the browser
-   renders the camera feed and session panel.  The exact message type and
-   whether it reuses `session_start` or introduces `dev_session_start` is TBD.
+2. **Browser notification of student-triggered dev session** — still deferred.
+   When the student calls `conn.start_dev_session(...)` from `controller.py`,
+   the browser is not notified.  Design TBD.
 
-2. **Browser notification of student-triggered dev session** — when the student
-   calls `conn.start_dev_session(...)` from `controller.py`, the browser should
-   also be notified so it can display the camera feed.  Design TBD (racerlib
-   could send a message through `/ws` that server.py then broadcasts).
-
-3. **DEVDRIVE severity rendering** — `index.js` needs a CSS class / display rule
-   for the new DEVDRIVE severity in the notices div.
+3. **DEVDRIVE severity rendering** — ✅ Implemented: `.sev-8 { color: #a78bfa; }`
+   in `index.html` CSS; `addNotice()` lookup updated in `index.js` (Step 6).

@@ -154,6 +154,10 @@ class _CarState:
 
 car = _CarState()
 
+_dev_car_id      = "dev"   # last carID seen in a dev_session_start
+_current_session    = None  # cached session_start payload; replayed to reconnecting browsers
+_current_camera_url = None  # cached camera_url payload;  replayed to reconnecting browsers
+
 # ── WebSocket connection manager (/ws endpoint) ───────────────────────────────
 
 class WSManager:
@@ -197,6 +201,14 @@ class WSManager:
         for ws in dead:
             self.disconnect(ws)
 
+    async def broadcast_controllers(self, msg: dict) -> None:
+        """Send only to controller clients."""
+        raw  = json.dumps(msg)
+        dead = [ws for ws in list(self._controllers)
+                if not await self._send(ws, raw)]
+        for ws in dead:
+            self.disconnect(ws)
+
 
 ws_manager = WSManager()
 
@@ -215,10 +227,15 @@ async def serve_js():
     return FileResponse(HTML_DIR / "index.js")
 
 
+@app.get("/scripts/{filename}")
+async def serve_script(filename: str):
+    return FileResponse(HTML_DIR / "scripts" / filename)
+
+
 @app.get("/config")
 async def serve_config():
     """Return server config so index.html can pre-fill the username."""
-    return JSONResponse({"username": USERNAME, "lanIP": LAN_IP, "port": CLIENT_PORT})
+    return JSONResponse({"username": USERNAME, "lanIP": LAN_IP, "port": CLIENT_PORT, "devMode": DEV_MODE})
 
 
 @app.websocket("/ws")
@@ -229,12 +246,15 @@ async def ws_endpoint(websocket: WebSocket, role: str = "browser"):
       - controller.py:   wss://CLIENT_IP:PORT/ws?role=controller
 
     Inbound message types from clients:
-      login        — {username}  — browser login; triggers user_register if not yet done
-      user_request — {action, carPreference?}  — forwarded to host
-      drive        — {steering, throttle}       — forwarded to car WS
-      local_notice — {severity, text}           — forwarded to browser clients only
+      login             — {username}  — browser login; triggers user_register if not yet done
+      user_request      — {action, carPreference?}  — forwarded to host
+      drive             — {steering, throttle}       — forwarded to car WS
+      local_notice      — {severity, text}           — forwarded to browser clients only
+      algo_params       — forwarded to controller clients only
+      dev_session_start — (DEV_MODE only) synthesise + broadcast session_start
+      dev_session_stop  — (DEV_MODE only) broadcast session_end
     """
-    global USERNAME, _registered
+    global USERNAME, _registered, _current_session, _current_camera_url
 
     await ws_manager.connect(websocket, role)
     try:
@@ -251,7 +271,12 @@ async def ws_endpoint(websocket: WebSocket, role: str = "browser"):
                 new_username = (msg.get("username") or "").strip()
                 if new_username and not _registered:
                     USERNAME = new_username
-                    asyncio.create_task(_register_with_host())
+                    if not DEV_MODE:
+                        asyncio.create_task(_register_with_host())
+                if role != "controller" and _current_session is not None:
+                    await websocket.send_text(json.dumps(_current_session))
+                    if _current_camera_url is not None:
+                        await websocket.send_text(json.dumps(_current_camera_url))
 
             elif t == "drive":
                 if car.ws is not None and car.token is not None:
@@ -282,6 +307,49 @@ async def ws_endpoint(websocket: WebSocket, role: str = "browser"):
                     "severity": msg.get("severity", 6),
                     "text":     msg.get("text", ""),
                 })
+
+            elif t == "algo_params":
+                await ws_manager.broadcast_controllers(msg)
+
+            elif t == "e_stop":
+                await ws_manager.broadcast_controllers(msg)
+
+            elif t == "camera_url":
+                _current_camera_url = msg
+                await ws_manager.broadcast_browsers(msg)
+
+            elif t == "dev_session_start":
+                if DEV_MODE:
+                    global _dev_car_id
+                    _dev_car_id  = msg.get("carID", "dev")
+                    now          = datetime.now(timezone.utc).timestamp()
+                    time_limit   = msg.get("timeLimitSec")
+                    session_msg  = {
+                        "type":             "session_start",
+                        "carID":            _dev_car_id,
+                        "carIP":            "dev",
+                        "wsPort":           0,
+                        "mjpegURL":         msg.get("mjpegURL"),
+                        "sessionToken":     "dev-token",
+                        "reverseAllowed":   msg.get("reverseAllowed", False),
+                        "timeLimitSec":     time_limit,
+                        "cameraIntrinsics": msg.get("cameraIntrinsics"),
+                        "startTime":        now,
+                        "endTime":          now + time_limit if time_limit else None,
+                    }
+                    _current_session    = session_msg
+                    _current_camera_url = None
+                    await ws_manager.broadcast_all(session_msg)
+
+            elif t == "dev_session_stop":
+                if DEV_MODE:
+                    _current_session    = None
+                    _current_camera_url = None
+                    await ws_manager.broadcast_all({
+                        "type":   "session_end",
+                        "carID":  _dev_car_id,
+                        "reason": "user_exit",
+                    })
 
     except WebSocketDisconnect:
         pass
@@ -372,12 +440,17 @@ async def disconnect():
 
 @sio.on("session_start")
 async def on_session_start(data):
+    global _current_session
+    _current_session = {"type": "session_start", **data}
     await _start_car_session(data)
-    await ws_manager.broadcast_all({"type": "session_start", **data})
+    await ws_manager.broadcast_all(_current_session)
 
 
 @sio.on("session_end")
 async def on_session_end(data):
+    global _current_session, _current_camera_url
+    _current_session    = None
+    _current_camera_url = None
     await _end_car_session()
     await ws_manager.broadcast_all({"type": "session_end", **data})
 
@@ -447,9 +520,11 @@ async def main() -> None:
 
     if DEV_MODE:
         print("[server] Dev mode — no host connection.")
+        print(f"[server] Run controller with port {CLIENT_PORT}:  python controller.py --dev --port {CLIENT_PORT}")
         await uv_server.serve()
     else:
         print(f"[server] Connecting to host: {HOST_URL}")
+        print(f"[server] Run controller with port {CLIENT_PORT}:  python controller.py --port {CLIENT_PORT}")
         await asyncio.gather(
             uv_server.serve(),
             _sio_connect_loop(),
