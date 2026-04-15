@@ -1,9 +1,19 @@
 import time
 import math
 from gz.transport13 import Node
-from gz.msgs.double_pb2 import Double
-from gz.msgs.pose_pb2 import Pose
-from gz.msgs.vector3d_pb2 import Vector3d
+from gz.msgs10.double_pb2 import Double
+from gz.msgs10.pose_pb2 import Pose
+from gz.msgs10.vector3d_pb2 import Vector3d
+
+'''
+Gazebo intentionally versions every Python ABI to avoid breakage when multiple Gazebo releases coexist:
+	Component 	Python module
+	Transport 	gz.transport13
+	Messages	gz.msgs10
+	Math		gz.math7
+	Sim			gz.sim8
+There is no unversioned alias like gz.msgs on Ubuntu Noble / Harmonic
+'''
 
 WORLD = "default"
 MODEL = "pantilt"

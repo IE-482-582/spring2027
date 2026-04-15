@@ -6,7 +6,7 @@
     </include>
 
     <include>
-      <uri>model://floating_plane</uri>
+      <uri>model://floating_image</uri>
     </include>
 
     <plugin filename="gz-sim-physics-system"
