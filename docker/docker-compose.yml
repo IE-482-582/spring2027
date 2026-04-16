@@ -2,12 +2,13 @@ version: "3.8"
 
 services:
   gazebo:
-    build: ./docker
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: gazebo_class
     volumes:
-      - ./:/workspace
-    environment:
-      - GZ_SIM_RESOURCE_PATH=/workspace/models:/workspace/worlds:/usr/share/gz
+      - ../:/workspace
+    environment: []
     ports:
       - "6080:80"
     tty: true

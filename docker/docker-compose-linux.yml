@@ -1,12 +1,13 @@
 services:
   gazebo:
-    build: ./docker
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: gazebo_class
     volumes:
-      - ./:/workspace
+      - ../:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix
     environment:
       - DISPLAY=${DISPLAY}
-      - GZ_SIM_RESOURCE_PATH=/workspace/models:/workspace/worlds:/usr/share/gz
     network_mode: host
     privileged: true

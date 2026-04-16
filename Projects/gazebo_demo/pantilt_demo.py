@@ -2,8 +2,8 @@ import time
 import math
 from gz.transport13 import Node
 from gz.msgs10.double_pb2 import Double
+from gz.msgs10.boolean_pb2 import Boolean
 from gz.msgs10.pose_pb2 import Pose
-from gz.msgs10.vector3d_pb2 import Vector3d
 
 '''
 Gazebo intentionally versions every Python ABI to avoid breakage when multiple Gazebo releases coexist:
@@ -17,23 +17,19 @@ There is no unversioned alias like gz.msgs on Ubuntu Noble / Harmonic
 
 WORLD = "default"
 MODEL = "pantilt"
+FLOATING_IMAGE = "floating_image"
 
 node = Node()
 
 # Publishers
 pan_pub = node.advertise(
-    f"/model/{MODEL}/joint/pan_joint/cmd_pos",
+    f"/model/{MODEL}/joint/pan_joint/0/cmd_pos",
     Double
 )
 
 tilt_pub = node.advertise(
-    f"/model/{MODEL}/joint/tilt_joint/cmd_pos",
+    f"/model/{MODEL}/joint/tilt_joint/0/cmd_pos",
     Double
-)
-
-pose_pub = node.advertise(
-    f"/world/{WORLD}/set_pose",
-    Pose
 )
 
 def set_pan(angle):
@@ -48,11 +44,22 @@ def set_tilt(angle):
 
 def move_image(x, y, z):
     pose = Pose()
-    pose.name = "floating_image"
+    pose.name = FLOATING_IMAGE
     pose.position.x = x
     pose.position.y = y
     pose.position.z = z
-    pose_pub.publish(pose)
+    ok, response = node.request(
+        f"/world/{WORLD}/set_pose",
+        pose,
+        Pose,
+        Boolean,
+        1000,
+    )
+    if not ok or not response.data:
+        raise RuntimeError(
+            "set_pose request failed. Confirm the world includes "
+            "gz::sim::systems::UserCommands and restart Gazebo."
+        )
 
 # Simple sweep demo
 t = 0
