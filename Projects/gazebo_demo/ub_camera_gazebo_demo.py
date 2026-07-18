@@ -33,8 +33,8 @@ _add_local_ub_code_to_path()
 import ub_camera
 
 
-# DEFAULT_TOPIC = '/world/default/model/pantilt/link/tilt_link/sensor/camera/image'
-DEFAULT_TOPIC = '/world/default/model/car1/link/camera_link/sensor/front_camera/image'
+DEFAULT_TOPIC = '/world/default/model/pantilt/link/tilt_link/sensor/camera/image'
+# DEFAULT_TOPIC = '/world/default/model/car1/link/camera_link/sensor/front_camera/image'
 
 def parse_args():
 	parser = argparse.ArgumentParser(

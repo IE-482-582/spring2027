@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import math
 import time
 
@@ -7,10 +8,14 @@ from gz.transport13 import Node
 from gz.msgs10.twist_pb2 import Twist
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--model", default="car1", help="Model name (default: car1)")
+args = parser.parse_args()
+
 node = Node()
 
 cmd_pub = node.advertise(
-    "/cmd_vel",
+    f"/model/{args.model}/cmd_vel",
     Twist,
 )
 
