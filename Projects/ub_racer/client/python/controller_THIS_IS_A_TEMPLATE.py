@@ -32,23 +32,27 @@ Dev mode (no host required — use your own camera URL):
 Publishing notices to your client webpage:
 conn.notice(<severity level>, "<some message>"
 	Valid Severity Levels:
-	ub_utils.SEVERITY_EMERGENCY       ub_utils.SEVERITY_ALERT       ub_utils.SEVERITY_CRITICAL
-	ub_utils.SEVERITY_ERROR           ub_utils.SEVERITY_WARNING     ub_utils.SEVERITY_NOTICE
-	ub_utils.SEVERITY_INFO            ub_utils.SEVERITY_DEBUG
-Ex:  conn.notice(ub_utils.SEVERITY_INFO, "You are connected")
+	olab_utils.SEVERITY_EMERGENCY       olab_utils.SEVERITY_ALERT       olab_utils.SEVERITY_CRITICAL
+	olab_utils.SEVERITY_ERROR           olab_utils.SEVERITY_WARNING     olab_utils.SEVERITY_NOTICE
+	olab_utils.SEVERITY_INFO            olab_utils.SEVERITY_DEBUG
+Ex:  conn.notice(olab_utils.SEVERITY_INFO, "You are connected")
 """
 
 import argparse
 
 from lib.racerlib import Racer
 
-import ub_camera, ub_utils
+import olab_camera, olab_utils
 import cv2
 import numpy as np
 import time
 
-# Check version and get update notification:
-ub_camera.checkVersion()
+# olab_camera dropped ub_camera's checkVersion() (it compared against the old
+# ub_code repo's auto-bumped _version.py, a versioning scheme olab_code no
+# longer uses) -- print the installed version instead, so an outdated
+# install is immediately visible.
+print(f"olab_camera version: {olab_camera.__version__}")
+print(f"olab_utils version:  {olab_utils.__version__}")
 
 # ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -176,18 +180,18 @@ def on_session_start(data: dict) -> None:
 		data["mjpegURL"]                      — camera stream URL
 	"""
 	print(f"[session] Started — car: {data.get('carID')}")
-	conn.notice(ub_utils.SEVERITY_INFO,  f"Session Started - Car: {data.get('carID')}")
-	conn.notice(ub_utils.SEVERITY_DEBUG, f"[DEBUG] Session Start Data: {data}")
+	conn.notice(olab_utils.SEVERITY_INFO,  f"Session Started - Car: {data.get('carID')}")
+	conn.notice(olab_utils.SEVERITY_DEBUG, f"[DEBUG] Session Start Data: {data}")
 	
 	# ── YOUR CODE HERE ──────────────────────────────────────────────────── #
 	global cam
 	
-	port = ub_utils.findOpenPort(8000, options=range(8000,8011))
+	port = olab_utils.findOpenPort(8000, options=range(8000,8011))
 	
 	device = data['mjpegURL']
 	if isinstance(device, str) and device.isdigit():
 		device = int(device)
-	cam[data['carID']] = ub_camera.CameraUSB(device=device)
+	cam[data['carID']] = olab_camera.CameraUSB(device=device)
 
 	if data.get('cameraIntrinsics'):
 		for res, params in data['cameraIntrinsics'].items():
@@ -198,7 +202,7 @@ def on_session_start(data: dict) -> None:
 		
 	# streamURL is like 'https://192.168.2.14:8000/stream.mjpg'
 	conn.set_camera_url(cam[data['carID']].streamURL)    # tells the browser where to display
-	conn.notice(ub_utils.SEVERITY_INFO, f"Your camera stream is available at {cam[data['carID']].streamURL}")
+	conn.notice(olab_utils.SEVERITY_INFO, f"Your camera stream is available at {cam[data['carID']].streamURL}")
 	
 def on_session_end(data: dict) -> None:
 	"""Called when the session ends for any reason.
@@ -209,8 +213,8 @@ def on_session_end(data: dict) -> None:
 	To re-queue automatically after each session, call conn.join() here.
 	"""
 	print(f"[session] Ended — reason: {data.get('reason')}")     
-	conn.notice(ub_utils.SEVERITY_INFO, f"Session Ended — reason: {data.get('reason')}")     
-	conn.notice(ub_utils.SEVERITY_DEBUG, f"[DEBUG] Session End Data: {data}")
+	conn.notice(olab_utils.SEVERITY_INFO, f"Session Ended — reason: {data.get('reason')}")     
+	conn.notice(olab_utils.SEVERITY_DEBUG, f"[DEBUG] Session End Data: {data}")
 
 	# ── YOUR CODE HERE ──────────────────────────────────────────────────── #
 	global cam
@@ -272,7 +276,7 @@ def on_params(data: dict) -> None:
 	global _params
 	_params = data
 
-	conn.notice(ub_utils.SEVERITY_DEBUG, f"[DEBUG] params updated: {data}")      
+	conn.notice(olab_utils.SEVERITY_DEBUG, f"[DEBUG] params updated: {data}")      
 	'''
 	print(f"[params] color={data.get('color')}  "
 		  f"maxThrottle={data.get('maxThrottle')}  "
@@ -289,7 +293,7 @@ def on_estop(is_driving: bool) -> None:
 	global isDriving
 	isDriving = is_driving
 	state = "ENABLED" if is_driving else "STOPPED"
-	conn.notice(ub_utils.SEVERITY_WARNING if not is_driving else ub_utils.SEVERITY_INFO,
+	conn.notice(olab_utils.SEVERITY_WARNING if not is_driving else olab_utils.SEVERITY_INFO,
 				f"E-Stop: Driving {state}")
 
 

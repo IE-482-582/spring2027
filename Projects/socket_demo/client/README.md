@@ -205,7 +205,7 @@ elif category == 'myFeatureStart':
     camID      = data['camID']
     fps_target = data['framerate']
 
-    self.camera[camID].addMyFeature(   # replace with the actual ub_camera method
+    self.camera[camID].addMyFeature(   # replace with the actual olab_camera method
         fps_target   = fps_target,
         postFunction = self.myFeaturePostFunction,
         postFunctionArgs = {'camID': camID}

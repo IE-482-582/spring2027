@@ -7,14 +7,17 @@ import time
 LOCAL_SSL_PATH  = None
 FACE_MODEL_PATH = None
 
-import ub_camera, ub_utils   # Visit https://github.com/optimatorlab/ub_code 
+import olab_camera, olab_utils   # Visit https://github.com/optimatorlab/olab_code
 import cv2
 import numpy as np
 
-
-current, latest, is_up_to_date = ub_camera.checkVersion(verbose=False)
-if not is_up_to_date:
-    print(f"Please update ub_camera from {current} to {latest}")
+# olab_camera dropped ub_camera's checkVersion() (it compared against the old
+# ub_code repo's auto-bumped _version.py, a versioning scheme olab_code no
+# longer uses) -- print the installed version instead, so a student running
+# an outdated version is immediately visible in class, without needing a
+# network call to compare against "latest."
+print(f"olab_camera version: {olab_camera.__version__}")
+print(f"olab_utils version:  {olab_utils.__version__}")
 
 STATUS_RATE = 1/5  # [Hz] — main loop rate
 
@@ -505,7 +508,7 @@ class Main:
 			   circle, color the circle green; otherwise, color it red.
 			   `self.circle_params['color'] = (BLUECOLOR, GREENCOLOR, REDCOLOR)`
 			   - See sample code below.
-			   - See http://github.com/optimatorlab/ub_code?tab=readme-ov-file#circle-and-text-overlays for more details.
+			   - See https://github.com/optimatorlab/olab_code/blob/main/packages/olab_camera/docs/usage_guide.md#circle-and-text-overlays for more details.
 			       - How to know the radius of the target circle?
 			'''
 
@@ -663,11 +666,11 @@ class Main:
 	def startCamera(self, camID, outputPort, apiPref, device, sslPath=None, intrinsics=None, res_cols=640, res_rows=480):
 		# Initialize `CameraUSB` Class
 		try:
-			port = ub_utils.findOpenPort(outputPort, options=range(8000,8011))
+			port = olab_utils.findOpenPort(outputPort, options=range(8000,8011))
 
 			paramDict = {'res_rows':res_rows, 'res_cols':res_cols, 'fps_target':30, 'outputPort': port}
 
-			self.camera[camID] = ub_camera.CameraUSB(paramDict = paramDict,
+			self.camera[camID] = olab_camera.CameraUSB(paramDict = paramDict,
 													 device = device,
 													 apiPref = apiPref,
 													 sslPath = sslPath)
