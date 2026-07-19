@@ -3,14 +3,14 @@
 '''
 Typical usage:
 
-python3 Projects/gazebo_demo/ub_camera_gazebo_demo.py
+python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py
 
 A few useful variants:
 
-python3 Projects/gazebo_demo/ub_camera_gazebo_demo.py --no-stream
-python3 Projects/gazebo_demo/ub_camera_gazebo_demo.py --port 8001 --protocol websocket
-python3 Projects/gazebo_demo/ub_camera_gazebo_demo.py --zoom 2.0
-python3 Projects/gazebo_demo/ub_camera_gazebo_demo.py --transport-module gz.transport13 --msgs-module gz.msgs10
+python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py --no-stream
+python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py --port 8001 --protocol websocket
+python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py --zoom 2.0
+python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py --transport-module gz.transport13 --msgs-module gz.msgs10
 '''
 
 
@@ -20,17 +20,18 @@ import sys
 import time
 
 
-def _add_local_ub_code_to_path():
-	"""Allow this demo to run directly against a local ub_code checkout."""
+def _add_local_olab_code_to_path():
+	"""Allow this demo to run directly against a local olab_code checkout,
+	instead of the pip-installed package."""
 	home = os.path.expanduser('~')
-	ub_code_root = os.path.join(home, 'Projects', 'ub_code')
-	if ub_code_root not in sys.path:
-		sys.path.insert(0, ub_code_root)
+	olab_camera_src = os.path.join(home, 'Projects', 'olab_code', 'packages', 'olab_camera', 'src')
+	if olab_camera_src not in sys.path:
+		sys.path.insert(0, olab_camera_src)
 
 
-_add_local_ub_code_to_path()
+_add_local_olab_code_to_path()
 
-import ub_camera
+import olab_camera
 
 
 DEFAULT_TOPIC = '/world/default/model/pantilt/link/tilt_link/sensor/camera/image'
@@ -38,17 +39,17 @@ DEFAULT_TOPIC = '/world/default/model/pantilt/link/tilt_link/sensor/camera/image
 
 def parse_args():
 	parser = argparse.ArgumentParser(
-		description='Demo ub_camera.CameraGazebo against a Gazebo Transport camera topic.'
+		description='Demo olab_camera.CameraGazebo against a Gazebo Transport camera topic.'
 	)
 	parser.add_argument('--topic', default=DEFAULT_TOPIC, help='Gazebo image topic to subscribe to')
-	parser.add_argument('--port', type=int, default=8000, help='ub_camera stream port')
+	parser.add_argument('--port', type=int, default=8000, help='olab_camera stream port')
 	parser.add_argument('--protocol', default='mjpeg', choices=('mjpeg', 'websocket', 'webrtc'),
-						help='ub_camera streaming protocol')
+						help='olab_camera streaming protocol')
 	parser.add_argument('--no-stream', action='store_true',
-						help='Subscribe to Gazebo but do not start the ub_camera stream server')
-	parser.add_argument('--rows', type=int, default=480, help='Nominal image height for ub_camera metadata')
-	parser.add_argument('--cols', type=int, default=640, help='Nominal image width for ub_camera metadata')
-	parser.add_argument('--fps', type=int, default=30, help='Nominal FPS for ub_camera metadata')
+						help='Subscribe to Gazebo but do not start the olab_camera stream server')
+	parser.add_argument('--rows', type=int, default=480, help='Nominal image height for olab_camera metadata')
+	parser.add_argument('--cols', type=int, default=640, help='Nominal image width for olab_camera metadata')
+	parser.add_argument('--fps', type=int, default=30, help='Nominal FPS for olab_camera metadata')
 	parser.add_argument('--zoom', type=float, default=1.0, help='Optional digital zoom level')
 	parser.add_argument('--transport-module', default=None,
 						help='Optional explicit Gazebo transport module, e.g. gz.transport13')
@@ -60,7 +61,7 @@ def parse_args():
 def main():
 	args = parse_args()
 
-	camera = ub_camera.CameraGazebo(
+	camera = olab_camera.CameraGazebo(
 		topic=args.topic,
 		paramDict={
 			'res_rows': args.rows,

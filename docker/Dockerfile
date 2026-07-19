@@ -27,19 +27,22 @@ WORKDIR /workspace
 
 RUN apt install git -y
 
-# ub_camera pre-reqs and ub_code
-# numpy/ultralytics first, then swap opencv packages, then remaining deps
+# olab_camera pre-reqs and olab_code (formerly ub_camera / ub_code)
+# numpy/ultralytics first, then swap opencv packages, then olab_camera itself --
+# ultralytics pulls in plain opencv-python, which conflicts with
+# opencv-contrib-python (olab_camera needs the contrib variant for ArUco
+# support). Installing ultralytics first, then swapping opencv, then
+# olab_camera last (without re-requesting the yolo extra, which would
+# re-trigger the same conflict) avoids it. Same ordering OFM's
+# deploy_vehicle.py uses on real RPi hardware.
 RUN pip install --break-system-packages --ignore-installed \
         "numpy>=1.21.0" \
         "ultralytics>=8.3.0" \
     && pip uninstall --break-system-packages -y opencv-python opencv-contrib-python \
     && pip install --break-system-packages \
         "opencv-contrib-python>=4.10.0" \
-        "pyzbar>=0.1.9" \
-        "websockets>=12.0" \
-        "aiortc>=1.9.0" \
-        "aiohttp>=3.9.0" \
-        git+https://github.com/optimatorlab/ub_code.git@main
+        "olab-camera[websocket,webrtc] @ git+https://github.com/optimatorlab/olab_code.git@main#subdirectory=packages/olab_camera" \
+        "olab-utils @ git+https://github.com/optimatorlab/olab_code.git@main#subdirectory=packages/olab_utils"
 
 
 COPY docker/entrypoint.sh /entrypoint.sh

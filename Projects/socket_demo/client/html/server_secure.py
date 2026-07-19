@@ -27,7 +27,7 @@ from geventwebsocket.handler import WebSocketHandler
 import socketio
 from flask import Flask, send_from_directory, make_response
 
-import ub_utils
+import olab_utils
 
 # ── Custom MIME types (mirrors the original server_secure.cjs configuration) ──
 _CUSTOM_MIME_TYPES = {
@@ -204,7 +204,7 @@ if __name__ == '__main__':
 	host   = '0.0.0.0' if args.public else 'localhost'
 	scope  = 'publicly' if args.public else 'locally'
 
-	port = ub_utils.findOpenPort(args.port, options=range(8080,8090))
+	port = olab_utils.findOpenPort(args.port, options=range(8080,8090))
 	print(f'Dev server running {scope}.  Connect to https://localhost:{port}/')
 	if args.public:
 		print(f'Also reachable at https://{lan_ip}:{port}/')
