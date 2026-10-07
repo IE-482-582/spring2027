@@ -15,21 +15,7 @@ python3 Projects/gazebo_demo/olab_camera_gazebo_demo.py --transport-module gz.tr
 
 
 import argparse
-import os
-import sys
 import time
-
-
-def _add_local_olab_code_to_path():
-	"""Allow this demo to run directly against a local olab_code checkout,
-	instead of the pip-installed package."""
-	home = os.path.expanduser('~')
-	olab_camera_src = os.path.join(home, 'Projects', 'olab_code', 'packages', 'olab_camera', 'src')
-	if olab_camera_src not in sys.path:
-		sys.path.insert(0, olab_camera_src)
-
-
-_add_local_olab_code_to_path()
 
 import olab_camera
 

@@ -27,22 +27,16 @@ WORKDIR /workspace
 
 RUN apt install git -y
 
-# olab_camera pre-reqs and olab_code (formerly ub_camera / ub_code)
-# numpy/ultralytics first, then swap opencv packages, then olab_camera itself --
-# ultralytics pulls in plain opencv-python, which conflicts with
-# opencv-contrib-python (olab_camera needs the contrib variant for ArUco
-# support). Installing ultralytics first, then swapping opencv, then
-# olab_camera last (without re-requesting the yolo extra, which would
-# re-trigger the same conflict) avoids it. Same ordering OFM's
-# deploy_vehicle.py uses on real RPi hardware.
+# olab_camera and olab_utils (from olab_code, released on PyPI; formerly
+# ub_camera / ub_code). olab_camera and ultralytics both use plain
+# opencv-python now, so the yolo extra installs cleanly with no opencv swap.
+# libzbar0 is the system library pyzbar ([barcode] extra) wraps --
+# socket_demo's client uses addBarcode().
+# --ignore-installed because pip can't upgrade apt's python3-numpy in place.
+RUN apt update && apt install -y libzbar0 && rm -rf /var/lib/apt/lists/*
 RUN pip install --break-system-packages --ignore-installed \
-        "numpy>=1.21.0" \
-        "ultralytics>=8.3.0" \
-    && pip uninstall --break-system-packages -y opencv-python opencv-contrib-python \
-    && pip install --break-system-packages \
-        "opencv-contrib-python>=4.10.0" \
-        "olab-camera[websocket,webrtc] @ git+https://github.com/optimatorlab/olab_code.git@main#subdirectory=packages/olab_camera" \
-        "olab-utils @ git+https://github.com/optimatorlab/olab_code.git@main#subdirectory=packages/olab_utils"
+        "olab-camera[yolo,websocket,webrtc,barcode]>=0.1.0" \
+        "olab-utils>=0.2.0"
 
 
 COPY docker/entrypoint.sh /entrypoint.sh
